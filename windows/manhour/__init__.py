@@ -1,0 +1,1 @@
+from .manhourwin import ManhourWin
