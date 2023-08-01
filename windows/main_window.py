@@ -1,5 +1,8 @@
+import sys
+
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtCore import pyqtSlot, Qt
+from PyQt5 import QtGui
 
 from .ui import Ui_MainWindow
 from windows.manhour import ManhourWin
@@ -15,6 +18,9 @@ class MainWindow(QMainWindow):
         self.ui.tabWidget.setVisible(False)
         self.setCentralWidget(self.ui.tabWidget)
         self.setWindowState(Qt.WindowMaximized)  # 窗口最大化显示
+
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        sys.exit()
 
     @pyqtSlot()
     def on_tabWidget_currentChanged(self, index):  # tabWidget当前页面变化
@@ -34,3 +40,11 @@ class MainWindow(QMainWindow):
         curIndex = self.ui.tabWidget.addTab(form, "Manhour")
         self.ui.tabWidget.setCurrentIndex(curIndex)
         self.ui.tabWidget.setVisible(True)
+
+    @pyqtSlot()
+    def on_actionPackages_triggered(self):
+        pass
+
+    @pyqtSlot()
+    def on_actionAircrafts_triggered(self):
+        pass
