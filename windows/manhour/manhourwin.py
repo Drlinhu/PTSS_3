@@ -2,12 +2,13 @@ import os
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 from PyQt5 import QtSql
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from .nrc_report_assistant import NrcReportAssistantWin
 from utils.database import DatabaseManager
+from utils.nrc_corpus import *
 
 TABLE_HEADER_MAPPING = {'id': 'Id',
                         'class': 'Class',
@@ -39,6 +40,7 @@ class ManhourWin(QtWidgets.QWidget):
 
         self.table_name = "MhFinalized"
         self.db = DatabaseManager()
+        self.query = QtSql.QSqlQuery(self.db.con)
 
         self.init_table()  # 初始化表格
 
@@ -47,12 +49,20 @@ class ManhourWin(QtWidgets.QWidget):
         # 创建表格模型(不可编辑, 默认可排序)
         self.table_model = QtSql.QSqlTableModel(self, self.db.get_connection_by_name())
         self.table_model.setTable(self.table_name)
+
+        # 创建选择模型
+        self.selection_model = QItemSelectionModel(self.table_model)
+
+        # 设置表格数据模型和选择模型
+        self.ui.tableView.setModel(self.table_model)
+        self.ui.tableView.setSelectionModel(self.selection_model)
+
+        # 设置表格标题
         self.field_num = self.db.get_field_num(self.table_model)  # 获取字段名和序号
         for field, column in self.field_num.items():  # 设置字段显示名
             self.table_model.setHeaderData(column, Qt.Horizontal, TABLE_HEADER_MAPPING[field])
 
         # 设置表格视图属性
-        self.ui.tableView.setModel(self.table_model)
         for field, column in self.field_num.items():  # 设置表格列宽度默认行为
             if field not in ['description', 'remark']:
                 self.ui.tableView.horizontalHeader().setSectionResizeMode(column,
@@ -68,7 +78,6 @@ class ManhourWin(QtWidgets.QWidget):
         self.ui.tableView.horizontalHeader().sortIndicatorChanged.connect(
             lambda index, order: self.table_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
 
-
     @pyqtSlot()
     def on_toolButtonNrcReportAssistant_clicked(self):
         self.nrc_reportAssistant_win = NrcReportAssistantWin()
@@ -76,6 +85,51 @@ class ManhourWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_pushButtonSearch_clicked(self):
+        has_nrc = self.ui.checkBoxNrc.isChecked()
+        has_rtn = self.ui.checkBoxRtn.isChecked()
+        filter_str = None
+        if self.ui.radioButtonBySimi.isChecked():
+            desc = self.ui.lineEditSearchDesc.text()
+            corpus = ManhourVectorCorpus()
+            sims = self.ui.doubleSpinBoxSims.value()
+            results = corpus.get_similarity_by_latest(search_text=desc, threshold=sims)
+
+            self.query.prepare(f"SELECT id FROM {self.table_name} LIMIT 1 OFFSET :offset")
+            coll_id = []
+            for r in results:
+                self.query.bindValue(":offset", r[0] - 1)
+                if self.query.exec() and self.query.next():
+                    coll_id.append(self.query.value('id'))
+            if coll_id:
+                filter_str = ' OR '.join([f"id='{x}'" for x in coll_id])
+            else:
+                filter_str = 'id=-1'
+
+        if self.ui.radioButtonByWord.isChecked():
+            condition = {}
+            if self.ui.lineEditSearchId.text():
+                condition['id'] = self.ui.lineEditSearchId.text()
+            if self.ui.lineEditSearchAcType.text():
+                condition['ac_type'] = self.ui.lineEditSearchAcType.text()
+            if self.ui.lineEditSearchRegister.text():
+                condition['register'] = self.ui.lineEditSearchRegister.text()
+            if self.ui.lineEditSearchPkgId.text():
+                condition['pkg_id'] = self.ui.lineEditSearchPkgId.text()
+            if self.ui.lineEditSearchDesc.text():
+                condition['description'] = self.ui.lineEditSearchDesc.text()
+            filter_str = ' AND '.join([f"{field} LIKE '%{value}%'" for field, value in condition.items()])
+
+        if filter_str:
+            if has_nrc and has_rtn:
+                filter_str += " AND (class='NRC' OR class='RTN')"
+            elif has_nrc and not has_rtn:
+                filter_str += " AND class='NRC'"
+            elif not has_nrc and has_rtn:
+                filter_str += " AND class='RTN'"
+            else:
+                filter_str += " AND class!='NRC' AND class!='RTN'"
+        print(filter_str)
+        self.table_model.setFilter(filter_str)
         self.table_model.select()
 
     @pyqtSlot()
@@ -142,7 +196,23 @@ class ManhourWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_pushButtonDelete_clicked(self):
-        pass
+        selected_indexes = self.selection_model.selectedRows(column=self.field_num['id'])
+        if not selected_indexes:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
+            return
+        choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
+                                               QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if choose == QtWidgets.QMessageBox.Yes:
+            self.query.prepare(f"DELETE FROM {self.table_name} WHERE id=:id")
+            self.db.con.transaction()
+            for index in selected_indexes:
+                self.query.bindValue(':id', index.data())
+                self.query.exec()
+            if self.db.con.commit():
+                QtWidgets.QMessageBox.information(self, 'Information', 'Deleted!')
+                self.table_model.select()
+            else:
+                QtWidgets.QMessageBox.critical(self, 'Error', self.db.con.lastError().text())
 
     @pyqtSlot()
     def on_pushButtonSubtask_clicked(self):
@@ -155,6 +225,21 @@ class ManhourWin(QtWidgets.QWidget):
     @pyqtSlot()
     def on_pushButtonImage_clicked(self):
         pass
+
+    def on_radioButtonBySimi_toggled(self, checked):
+        if checked:
+            self.ui.doubleSpinBoxSims.setEnabled(True)
+            self.ui.lineEditSearchId.setEnabled(False)
+            self.ui.lineEditSearchAcType.setEnabled(False)
+            self.ui.lineEditSearchRegister.setEnabled(False)
+            self.ui.lineEditSearchPkgId.setEnabled(False)
+        else:
+            self.ui.doubleSpinBoxSims.setEnabled(False)
+            self.ui.lineEditSearchId.setEnabled(True)
+            self.ui.lineEditSearchAcType.setEnabled(True)
+            self.ui.lineEditSearchRegister.setEnabled(True)
+            self.ui.lineEditSearchPkgId.setEnabled(False)
+            self.ui.doubleSpinBoxSims.setValue(0.9)
 
     def show_table_header_menu(self, pos):
         # 创建右键菜单
