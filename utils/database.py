@@ -1,12 +1,36 @@
 from PyQt5.QtCore import QSettings
-from PyQt5.QtSql import QSqlDatabase, QSqlQuery
+from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 
 DATABASE = None
-TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS test (
-    a TEXT,
-    b TEXT
-);
-"""]
+TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
+    id          TEXT    DEFAULT ""
+                        PRIMARY KEY
+                        NOT NULL,
+    class       TEXT    DEFAULT "",
+    pkg_id      TEXT    DEFAULT "",
+    wo          TEXT    DEFAULT "",
+    ac_type     TEXT    DEFAULT "",
+    register    TEXT    DEFAULT "",
+    ref_task    TEXT    DEFAULT "",
+    description TEXT    DEFAULT "",
+    trade       TEXT    DEFAULT "",
+    ata         TEXT    DEFAULT "",
+    area        TEXT    DEFAULT "",
+    zone        TEXT    DEFAULT "",
+    category    TEXT    DEFAULT "",
+    skill       REAL    DEFAULT (0.0),
+    unskill     REAL    DEFAULT (0.0),
+    standard    TEXT    DEFAULT "",
+    dskill      REAL    DEFAULT (0.0),
+    dunskill    REAL    DEFAULT (0.0),
+    remark      TEXT    DEFAULT ""
+);""",
+             ]
+
+TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
+    description
+);""",
+               ]
 
 
 def initialize_database():
@@ -25,24 +49,54 @@ def initialize_database():
 
     # 初始化数据库
     db_manager = DatabaseManager()
+
+    # 创建表格
     for sql in TABLE_SQL:
+        db_manager.query(sql)
+
+    # 创建表格索引
+    for sql in TABLE_INDEX:
         db_manager.query(sql)
 
 
 class DatabaseManager(object):
-    _instance = None
+    """ 该类为数据库管理单例类"""
+    __instance = None
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DatabaseManager, cls).__new__(cls)
-            cls._instance.db = QSqlDatabase.addDatabase('QSQLITE')
-            cls._instance.db.setDatabaseName(DATABASE)  # 数据库文件名
-            if not cls._instance.db.open():
-                print('无法打开数据库')
-        return cls._instance
+        if cls.__instance is None:
+            cls.__instance = super(DatabaseManager, cls).__new__(cls)
+            # 创建默认数据库连接对象并设置数据库名
+            cls.__instance.con = QSqlDatabase.addDatabase('QSQLITE')
+            cls.__instance.con.setDatabaseName(DATABASE)
+            if not cls.__instance.con.open():
+                print('Open database failed')
+        return cls.__instance
 
     @classmethod
-    def query(cls, query_string):
-        query = QSqlQuery()
+    def get_connection_by_name(cls, name='qt_sql_default_connection'):
+        if QSqlDatabase.contains(name):
+            con = QSqlDatabase.database(name)
+        else:
+            con = QSqlDatabase.addDatabase("QSQLITE", name)  # 添加SQL LITE数据库驱动
+            con.setDatabaseName(DATABASE)
+        if not con.open():
+            raise ConnectionError('Failed to open database: ' + con.lastError().text())
+        return con
+
+    @classmethod
+    def get_field_num(cls, table_model: QSqlTableModel):
+        empty_rec = table_model.record()  # 获取空记录，只有字段名
+        field_num = {}  # 字段名与序号的字典
+        for i in range(empty_rec.count()):
+            field_name = empty_rec.fieldName(i)  # 字段名
+            field_num.setdefault(field_name)
+            field_num[field_name] = i
+        return field_num
+
+    def query(self, query_string):
+        query = QSqlQuery(self.__instance.con)  # 使用默认连接进行查询
         query.exec_(query_string)
+        print(query.lastError().text())
         return query
+

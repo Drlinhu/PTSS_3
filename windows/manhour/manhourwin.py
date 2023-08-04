@@ -1,17 +1,182 @@
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtCore import pyqtSlot
+import os
+from pathlib import Path
+import pandas as pd
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime
+from PyQt5 import QtSql
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from .nrc_report_assistant import NrcReportAssistantWin
+from utils.database import DatabaseManager
+
+TABLE_HEADER_MAPPING = {'id': 'Id',
+                        'class': 'Class',
+                        'pkg_id': 'Pkg_Id',
+                        'wo': 'WO',
+                        'ac_type': 'Ac_Type',
+                        'register': 'Register',
+                        'ref_task': 'Ref_Task',
+                        'description': 'Description',
+                        'trade': 'Trade',
+                        'ata': 'ATA',
+                        'area': 'Area',
+                        'zone': 'Zone',
+                        'category': 'Category',
+                        'skill': 'Skill',
+                        'unskill': 'Unskill',
+                        'standard': 'Standard',
+                        'dskill': 'Dskill',
+                        'dunskill': 'Dunskill',
+                        'remark': 'Remark',
+                        }
 
 
-class ManhourWin(QWidget):
+class ManhourWin(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        super(ManhourWin, self).__init__()
+        super(ManhourWin, self).__init__(parent)
         self.ui = Ui_ManHourForm()
         self.ui.setupUi(self)
+
+        self.table_name = "MhFinalized"
+        self.db = DatabaseManager()
+
+        self.init_table()  # 初始化表格
+
+    def init_table(self):
+
+        # 创建表格模型(不可编辑, 默认可排序)
+        self.table_model = QtSql.QSqlTableModel(self, self.db.get_connection_by_name())
+        self.table_model.setTable(self.table_name)
+        self.field_num = self.db.get_field_num(self.table_model)  # 获取字段名和序号
+        for field, column in self.field_num.items():  # 设置字段显示名
+            self.table_model.setHeaderData(column, Qt.Horizontal, TABLE_HEADER_MAPPING[field])
+
+        # 设置表格视图属性
+        self.ui.tableView.setModel(self.table_model)
+        for field, column in self.field_num.items():  # 设置表格列宽度默认行为
+            if field not in ['description', 'remark']:
+                self.ui.tableView.horizontalHeader().setSectionResizeMode(column,
+                                                                          QtWidgets.QHeaderView.ResizeToContents)
+            else:
+                self.ui.tableView.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+
+        # 设置表格视图的水平标题右击弹出菜单
+        self.ui.tableView.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tableView.horizontalHeader().customContextMenuRequested.connect(self.show_table_header_menu)
+
+        # 连接槽函数
+        self.ui.tableView.horizontalHeader().sortIndicatorChanged.connect(
+            lambda index, order: self.table_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
+
 
     @pyqtSlot()
     def on_toolButtonNrcReportAssistant_clicked(self):
         self.nrc_reportAssistant_win = NrcReportAssistantWin()
         self.nrc_reportAssistant_win.show()
+
+    @pyqtSlot()
+    def on_pushButtonSearch_clicked(self):
+        self.table_model.select()
+
+    @pyqtSlot()
+    def on_pushButtonImport_clicked(self):
+        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
+        if not read_path:
+            return
+
+        df = pd.read_excel(read_path, nrows=0)
+        # 验证数据字段完整性
+        for x in TABLE_HEADER_MAPPING.values():
+            if x not in df.columns:
+                QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
+                return
+        # 读取并保存数据
+        converters = {'WO': lambda y: str(y),
+                      'Description': lambda y: str(y).strip(),
+                      'ATA': lambda y: str(y),
+                      'Zone': lambda y: str(y),
+                      'Skill': lambda y: f'{y:.2f}',
+                      'Unskill': lambda y: f'{y:.2f}',
+                      'Dskill': lambda y: f'{y:.2f}',
+                      'Dunskill': lambda y: f'{y:.2f}', }
+        df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
+        query = QtSql.QSqlQuery(self.db.con)
+        query.prepare(f"""REPLACE INTO {self.table_name}
+                          VALUES ({','.join(['?' for _ in range(self.table_model.columnCount())])})""")
+        fault = False  # 标记在保存到数据库中是否存在错误
+        self.db.con.transaction()
+        for i in range(df.shape[0]):
+            for field, column in self.field_num.items():
+                header = TABLE_HEADER_MAPPING[field]
+                query.addBindValue(df.loc[i, header])
+            if not query.exec_():
+                fault = True
+                break
+        if not fault:  # 如果存入数据库无错误则直接提交否则退回之前的操作
+            self.db.con.commit()
+        else:
+            self.db.con.rollback()
+
+    @pyqtSlot()
+    def on_pushButtonExport_clicked(self):
+        today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
+        filename = f'MH_NRC_Finalized_{today}.xlsx'
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        if not save_path:
+            return
+
+        save_path = Path(save_path).resolve()
+        data = []
+        header = []
+        for j in range(self.table_model.columnCount()):
+            header.append(self.table_model.headerData(j, Qt.Horizontal, Qt.DisplayRole))
+        for i in range(self.table_model.rowCount()):
+            row_data = []
+            for j in range(self.table_model.columnCount()):
+                print(self.table_model.data(self.table_model.index(i, j), Qt.DisplayRole))
+                row_data.append(self.table_model.data(self.table_model.index(i, j), Qt.DisplayRole))
+            data.append(row_data)
+        df = pd.DataFrame(data, columns=header)
+        df.to_excel(save_path, index=False)
+        os.startfile(save_path.cwd())
+
+    @pyqtSlot()
+    def on_pushButtonDelete_clicked(self):
+        pass
+
+    @pyqtSlot()
+    def on_pushButtonSubtask_clicked(self):
+        pass
+
+    @pyqtSlot()
+    def on_pushButtonAddImage_clicked(self):
+        pass
+
+    @pyqtSlot()
+    def on_pushButtonImage_clicked(self):
+        pass
+
+    def show_table_header_menu(self, pos):
+        # 创建右键菜单
+        menu = QtWidgets.QMenu(self)
+        # 获取右键点击处的列索引
+        column = self.ui.tableView.horizontalHeader().logicalIndexAt(pos)
+        # 添加菜单项
+        if self.ui.tableView.horizontalHeader().sectionResizeMode(column) == QtWidgets.QHeaderView.Interactive:
+            column_resizable_action = QtWidgets.QAction("Non-resizable", self)
+        else:
+            column_resizable_action = QtWidgets.QAction("Resizable", self)
+        column_resizable_action.triggered.connect(lambda: self.set_column_resizable(pos))
+        menu.addAction(column_resizable_action)
+
+        # 显示右键菜单
+        menu.exec_(self.ui.tableView.viewport().mapToGlobal(pos))
+
+    def set_column_resizable(self, pos):
+        # 获取右键点击处的列索引
+        column = self.ui.tableView.horizontalHeader().logicalIndexAt(pos)
+
+        if self.ui.tableView.horizontalHeader().sectionResizeMode(column) == QtWidgets.QHeaderView.Interactive:
+            self.ui.tableView.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+        else:
+            self.ui.tableView.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
