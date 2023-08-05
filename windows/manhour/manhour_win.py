@@ -1,16 +1,15 @@
 import os
 from pathlib import Path
 import pandas as pd
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets,QtSql
 from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
-from PyQt5 import QtSql
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from .nrc_report_assistant import NrcReportAssistantWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 
-TABLE_HEADER_MAPPING = {'id': 'Id',
+TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
                         'class': 'Class',
                         'pkg_id': 'Pkg_Id',
                         'wo': 'WO',
@@ -94,21 +93,21 @@ class ManhourWin(QtWidgets.QWidget):
             sims = self.ui.doubleSpinBoxSims.value()
             results = corpus.get_similarity_by_latest(search_text=desc, threshold=sims)
 
-            self.query.prepare(f"SELECT id FROM {self.table_name} LIMIT 1 OFFSET :offset")
+            self.query.prepare(f"SELECT mh_id FROM {self.table_name} LIMIT 1 OFFSET :offset")
             coll_id = []
             for r in results:
                 self.query.bindValue(":offset", r[0] - 1)
                 if self.query.exec() and self.query.next():
-                    coll_id.append(self.query.value('id'))
+                    coll_id.append(self.query.value('mh_id'))
             if coll_id:
-                filter_str = ' OR '.join([f"id='{x}'" for x in coll_id])
+                filter_str = ' OR '.join([f"mh_id='{x}'" for x in coll_id])
             else:
-                filter_str = 'id=-1'
+                filter_str = 'mh_id=-1'
 
         if self.ui.radioButtonByWord.isChecked():
             condition = {}
             if self.ui.lineEditSearchId.text():
-                condition['id'] = self.ui.lineEditSearchId.text()
+                condition['mh_id'] = self.ui.lineEditSearchId.text()
             if self.ui.lineEditSearchAcType.text():
                 condition['ac_type'] = self.ui.lineEditSearchAcType.text()
             if self.ui.lineEditSearchRegister.text():
@@ -168,6 +167,7 @@ class ManhourWin(QtWidgets.QWidget):
                 break
         if not fault:  # 如果存入数据库无错误则直接提交否则退回之前的操作
             self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
         else:
             self.db.con.rollback()
 
@@ -196,17 +196,17 @@ class ManhourWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_pushButtonDelete_clicked(self):
-        selected_indexes = self.selection_model.selectedRows(column=self.field_num['id'])
+        selected_indexes = self.selection_model.selectedRows(column=self.field_num['mh_id'])
         if not selected_indexes:
             QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
             return
         choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
                                                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         if choose == QtWidgets.QMessageBox.Yes:
-            self.query.prepare(f"DELETE FROM {self.table_name} WHERE id=:id")
+            self.query.prepare(f"DELETE FROM {self.table_name} WHERE mh_id=:mh_id")
             self.db.con.transaction()
             for index in selected_indexes:
-                self.query.bindValue(':id', index.data())
+                self.query.bindValue(':mh_id', index.data())
                 self.query.exec()
             if self.db.con.commit():
                 QtWidgets.QMessageBox.information(self, 'Information', 'Deleted!')

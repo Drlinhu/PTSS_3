@@ -3,7 +3,7 @@ from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 
 DATABASE = None
 TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
-    id          TEXT    DEFAULT ""
+    mh_id       TEXT    DEFAULT ""
                         PRIMARY KEY
                         NOT NULL,
     class       TEXT    DEFAULT "",
@@ -25,12 +25,60 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     dunskill    REAL    DEFAULT (0.0),
     remark      TEXT    DEFAULT ""
 );""",
+             """CREATE TABLE IF NOT EXISTS MhCxRemark (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mh_id           TEXT,
+    remark          TEXT    DEFAULT "",
+    create_user     TEXT,
+    create_datetime TEXT    DEFAULT (datetime('now') ) 
+                            NOT NULL,
+    update_user     TEXT,
+    update_datetime TEXT    DEFAULT (datetime('now') ) 
+                            NOT NULL
+);
+""",
+             """CREATE TABLE IF NOT EXISTS MhImage (
+    id    INTEGER PRIMARY KEY,
+    mh_id TEXT    NOT NULL,
+    name  TEXT,
+    image BLOB,
+    sheet INTEGER DEFAULT (1) 
+);
+""",
+             """CREATE TABLE IF NOT EXISTS MhNrcReport (
+    nrc_id      TEXT PRIMARY KEY,
+    register    TEXT DEFAULT "",
+    ref_task    TEXT DEFAULT "",
+    description TEXT DEFAULT "",
+    area        TEXT DEFAULT "",
+    trade       TEXT DEFAULT "",
+    ata         TEXT,
+    status      TEXT DEFAULT "",
+    standard    TEXT,
+    total       REAL DEFAULT (0.0),
+    report_date TEXT
+);""",
+             """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
+    nrc_id      TEXT PRIMARY KEY,
+    register    TEXT DEFAULT "",
+    ref_task    TEXT DEFAULT "",
+    description TEXT DEFAULT "",
+    area        TEXT DEFAULT "",
+    trade       TEXT DEFAULT "",
+    ata         TEXT,
+    status      TEXT DEFAULT "",
+    standard    TEXT,
+    total       REAL DEFAULT (0.0) 
+);
+""",
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
     description
 );""",
                ]
+
+__all__ = ['initialize_database', 'DatabaseManager']
 
 
 def initialize_database():
@@ -99,4 +147,3 @@ class DatabaseManager(object):
         query.exec_(query_string)
         print(query.lastError().text())
         return query
-

@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtCore import pyqtSlot, Qt
 from PyQt5 import QtGui
 
+from utils.database import *
 from .ui import Ui_MainWindow
 from windows.manhour import ManhourWin
 
@@ -18,6 +19,8 @@ class MainWindow(QMainWindow):
         self.ui.tabWidget.setVisible(False)
         self.setCentralWidget(self.ui.tabWidget)
         self.setWindowState(Qt.WindowMaximized)  # 窗口最大化显示
+        # 初始化数据库
+        initialize_database()
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
         sys.exit()
