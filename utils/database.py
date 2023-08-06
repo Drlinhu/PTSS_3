@@ -46,17 +46,21 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
 );
 """,
              """CREATE TABLE IF NOT EXISTS MhNrcReport (
-    nrc_id      TEXT PRIMARY KEY,
+    nrc_id      TEXT DEFAULT "",
     register    TEXT DEFAULT "",
     ref_task    TEXT DEFAULT "",
     description TEXT DEFAULT "",
     area        TEXT DEFAULT "",
     trade       TEXT DEFAULT "",
-    ata         TEXT,
+    ata         TEXT DEFAULT "",
     status      TEXT DEFAULT "",
-    standard    TEXT,
+    standard    TEXT DEFAULT "",
     total       REAL DEFAULT (0.0),
-    report_date TEXT
+    report_date TEXT,
+    PRIMARY KEY (
+        nrc_id,
+        report_date
+    )
 );""",
              """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
     nrc_id      TEXT PRIMARY KEY,
@@ -68,7 +72,8 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     ata         TEXT,
     status      TEXT DEFAULT "",
     standard    TEXT,
-    total       REAL DEFAULT (0.0) 
+    total       REAL DEFAULT (0.0),
+    mh_changed  REAL DEFAULT (0.0)
 );
 """,
              ]

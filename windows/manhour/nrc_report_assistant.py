@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, pyqtSlot, QDateTime
 
 from ..ui import Ui_NrcReprotAssistantForm
 from windows.image_viewer import ImageViewer
+from windows.input_date_dialog import DateInputDialog
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 
@@ -19,7 +20,10 @@ TABLE_HEADER_MAPPING = {'nrc_id': 'Nrc_Id',
                         'status': 'Status',
                         'standard': 'Standard',
                         'total': 'Total',
+                        'mh_changed': 'MH_Changed'
                         }
+
+CELL_BG = {}
 
 
 class NrcReportAssistantWin(QtWidgets.QWidget):
@@ -39,7 +43,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.tbReport_hHeader = self.ui.tableViewReport.horizontalHeader()
 
         # 创建表格模型(不可编辑, 默认可排序)
-        self.tbReport_model = QtSql.QSqlTableModel(self, self.db.get_connection_by_name())
+        self.tbReport_model = NrcReportSqlTableModel(self, self.db.con)
         self.tbReport_model.setTable(self.table_temp)
 
         # 创建选择模型
@@ -73,17 +77,26 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.tbReport_model.select()
 
     @pyqtSlot()
-    def on_pushButtonSearch_clicked(self):
+    def on_pushButtonSearch_clicked(self):  # TODO
         self.tbReport_model.select()
 
     @pyqtSlot()
     def on_btnReportImport_clicked(self):
+        def get_history_report_mh(nrc_id):
+            self.query.prepare(f"SELECT total FROM {self.table_main} WHERE nrc_id=:nrc_id")
+            self.query.bindValue(':nrc_id', nrc_id)
+            self.query.exec()
+            if self.query.first():
+                return self.query.value('total')
+            return 0.0
+
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
 
-        df = pd.read_excel(read_path, nrows=0)
+        """导入NRC工时记录"""
         # 验证数据字段完整性
+        df = pd.read_excel(read_path, nrows=0)
         for x in TABLE_HEADER_MAPPING.values():
             if x not in df.columns:
                 QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
@@ -93,11 +106,20 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             'Description': lambda y: str(y).strip(),
             'ATA': lambda y: str(y),
             'Total': lambda y: f'{y:.2f}',
+            'MH_Changed': lambda y: f'{y:.2f}',
         }
         df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
+        header_mh_changed = TABLE_HEADER_MAPPING['mh_changed']
+        header_total = TABLE_HEADER_MAPPING['total']
+        header_nrcId = TABLE_HEADER_MAPPING['nrc_id']
+        for i in range(df.shape[0]):
+            old_total = float(get_history_report_mh(df.loc[i, header_nrcId]))
+            new_total = float(df.loc[i, header_total])
+            df.loc[i, header_mh_changed] = f'{new_total - old_total:.2f}'
 
-        self.query.prepare(f"""REPLACE INTO {self.table_temp}
-                               VALUES ({','.join(['?' for _ in range(self.tbReport_model.columnCount())])})""")
+        sql = f"""REPLACE INTO {self.table_temp}
+                  VALUES ({','.join(['?' for _ in range(self.tbReport_model.columnCount())])})"""
+        self.query.prepare(sql)
         fault = False  # 标记在保存到数据库中是否存在错误
         self.db.con.transaction()
         for i in range(df.shape[0]):
@@ -109,7 +131,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                 break
         if not fault:  # 如果存入数据库无错误则直接提交否则退回之前的操作
             self.db.con.commit()
-            QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
+            QtWidgets.QMessageBox.information(self, 'Information', 'Import NRC successfully!')
             self.tbReport_model.select()
         else:
             self.db.con.rollback()
@@ -185,44 +207,63 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             return
         ims = []
         mh_id = selected_rowIndexes[0].data()
-        self.query.prepare("SELECT sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
+        self.query.prepare("SELECT id,sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
         self.query.bindValue(':mh_id', mh_id)
         self.query.exec()
         while self.query.next():
-            ims.append({field: self.query.value(field) for field in ['sheet', 'name', 'image']})
+            ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
         if not ims:
             QtWidgets.QMessageBox.information(self, 'Information', 'No images')
             return
 
         self.image_viewer = ImageViewer('MhImage', ims)
         self.image_viewer.show()
+        self.image_viewer.fit_image()
 
     @pyqtSlot()
-    def on_btnReportDetail_clicked(self):
+    def on_btnReportDetail_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_btnReportSubtask_clicked(self):
+    def on_btnReportSubtask_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_btnReportSave_clicked(self):
+    def on_btnReportSave_clicked(self):  # TODO
+        # 打开日期输入日期窗口
+        dialog = DateInputDialog()
+        dialog.set_label('Input report date:')
+        dialog.exec()
+        report_date = dialog.date()
+        # 将temp表的内容存入到正式数据库表中
+        sql = f"""REPLACE INTO {self.table_main} 
+                                (nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,report_date) 
+                    SELECT nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,:dt 
+                    FROM {self.table_temp};
+                 """
+        self.query.prepare(sql)
+        self.query.bindValue(':dt', report_date)
+        if not self.query.exec():
+            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+        else:
+            QtWidgets.QMessageBox.information(self, 'Information', 'Saved')
+            self.query.exec("DELETE FROM MhNrcReportTemp")
+            self.tbReport_model.select()
+
+    @pyqtSlot()
+    def on_btnHistoryExport_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_btnHistoryExport_clicked(self):
+    def on_btnHistoryImage_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_btnHistoryImage_clicked(self):
+    def on_btnHistoryDetail_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_btnHistoryDetail_clicked(self):
-        pass
-
-    @pyqtSlot()
-    def on_btnHistorySubtask_clicked(self):
+    def on_btnHistorySubtask_clicked(self):  # TODO
         pass
 
     def show_table_header_menu(self, pos):
@@ -249,3 +290,53 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+    def mark_report_difference(self):
+
+        sql = f"""SELECT * 
+                  FROM {self.table_main} 
+                  WHERE nrc_id=:nrc_id AND report_date=(SELECT MAX(report_date) 
+                                                        FROM {self.table_main} WHERE nrc_id=:nrc_id)
+               """
+        self.query.prepare(sql)
+        for row in range(self.tbReport_model.rowCount()):
+            nrc_id = self.tbReport_model.index(row, self.field_num['nrc_id']).data(Qt.DisplayRole)
+            self.query.bindValue(':nrc_id', nrc_id)
+            self.query.exec()
+            if self.query.first():  # 真表示已存在记录，则比较和存在的记录是否相同
+                print(self.query.value('nrc_id'))
+            else:  # 数据库不存在，表明为新的记录
+                pass
+
+
+class NrcReportSqlTableModel(QtSql.QSqlTableModel):
+    def __init__(self, parent, QObject=None, *args, **kwargs):
+        super().__init__(parent, QObject, *args, **kwargs)
+
+    def data(self, index, role=Qt.DisplayRole):
+        sql = f"""SELECT *
+                  FROM MhNrcReport
+                  WHERE nrc_id=:nrc_id AND report_date=(SELECT MAX(report_date)
+                                                        FROM MhNrcReport WHERE nrc_id=:nrc_id)
+               """
+        query = self.query()
+        query.prepare(sql)
+        if role == Qt.BackgroundRole:
+            nrc_id = self.data(self.index(index.row(), self.fieldIndex('nrc_id')), Qt.DisplayRole)
+            value = index.data(Qt.DisplayRole)
+            field_name = self.fieldIndex(self.headerData(index.column(), Qt.Horizontal, Qt.DisplayRole))
+            query.bindValue(':nrc_id', nrc_id)
+            query.exec_()
+            # 根据条件设置行背景颜色，只要有个不同整行显示黄色
+            if query.first() and value != query.value(field_name) and index.column() != self.fieldIndex('mh_changed'):
+                CELL_BG[index.row()] = QtGui.QColor(255, 255, 0)
+                return QtGui.QColor(255, 255, 0)  # 黄色
+            else:
+                return QtGui.QColor(255, 255, 255)  # 白色
+
+        if role == Qt.TextColorRole:
+            value = index.data(Qt.DisplayRole)
+            if index.column() == self.fieldIndex('mh_changed') and value != 0:
+                return QtGui.QColor(255, 0, 0)  # 红色
+
+        return super().data(index, role)
