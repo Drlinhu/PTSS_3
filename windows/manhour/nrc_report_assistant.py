@@ -10,7 +10,7 @@ from windows.input_date_dialog import DateInputDialog
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 
-TABLE_HEADER_MAPPING = {'nrc_id': 'Nrc_Id',
+TABLE_HEADER_MAPPING = {'nrc_id': 'NRC_ID',
                         'register': 'Register',
                         'ref_task': 'Ref_Task',
                         'description': 'Description',
@@ -37,9 +37,10 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.db = DatabaseManager()
         self.query = QtSql.QSqlQuery(self.db.con)
 
-        self.init_table()
+        self.init_report_table()
+        self.init_history_table()
 
-    def init_table(self):  # 初始化表格
+    def init_report_table(self):  # 初始化表格
         self.tbReport_hHeader = self.ui.tableViewReport.horizontalHeader()
 
         # 创建表格模型(不可编辑, 默认可排序)
@@ -75,6 +76,18 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             lambda index, order: self.tbReport_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
 
         self.tbReport_model.select()
+
+    def init_history_table(self):
+        header_labels = ['NRC_ID', 'Register', 'Description', 'Total', 'Simis']
+        self.ui.tableWidgetHistory.setColumnCount(len(header_labels))
+        self.ui.tableWidgetHistory.setHorizontalHeaderLabels(header_labels)
+
+        h_header = self.ui.tableWidgetHistory.horizontalHeader()
+        for col, field in enumerate(header_labels):
+            if field in ['Description']:
+                h_header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+            else:
+                h_header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
 
     @pyqtSlot()
     def on_pushButtonSearch_clicked(self):  # TODO
@@ -222,14 +235,22 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnReportDetail_clicked(self):  # TODO
-        pass
+        model = self.ui.tableViewReport.selectionModel()
+        selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
+        if len(selected_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
 
     @pyqtSlot()
     def on_btnReportSubtask_clicked(self):  # TODO
-        pass
+        model = self.ui.tableViewReport.selectionModel()
+        selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
+        if len(selected_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
 
     @pyqtSlot()
-    def on_btnReportSave_clicked(self):  # TODO
+    def on_btnReportSave_clicked(self):
         # 打开日期输入日期窗口
         dialog = DateInputDialog()
         dialog.set_label('Input report date:')
@@ -328,11 +349,14 @@ class NrcReportSqlTableModel(QtSql.QSqlTableModel):
             query.bindValue(':nrc_id', nrc_id)
             query.exec_()
             # 根据条件设置行背景颜色，只要有个不同整行显示黄色
-            if query.first() and value != query.value(field_name) and index.column() != self.fieldIndex('mh_changed'):
-                CELL_BG[index.row()] = QtGui.QColor(255, 255, 0)
-                return QtGui.QColor(255, 255, 0)  # 黄色
+            if query.first():
+                if value != query.value(field_name) and index.column() != self.fieldIndex('mh_changed'):
+                    CELL_BG[index.row()] = QtGui.QColor(255, 255, 0)
+                    return QtGui.QColor(255, 255, 0)  # 黄色
+                else:
+                    return QtGui.QColor(255, 255, 255)  # 白色
             else:
-                return QtGui.QColor(255, 255, 255)  # 白色
+                return QtGui.QColor(127, 255, 0)  # 绿色 新增
 
         if role == Qt.TextColorRole:
             value = index.data(Qt.DisplayRole)
