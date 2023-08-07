@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import pandas as pd
-from PyQt5 import QtWidgets,QtSql
+from PyQt5 import QtWidgets, QtSql
 from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
@@ -127,7 +127,6 @@ class ManhourWin(QtWidgets.QWidget):
                 filter_str += " AND class='RTN'"
             else:
                 filter_str += " AND class!='NRC' AND class!='RTN'"
-        print(filter_str)
         self.table_model.setFilter(filter_str)
         self.table_model.select()
 
@@ -180,6 +179,7 @@ class ManhourWin(QtWidgets.QWidget):
             return
 
         save_path = Path(save_path).resolve()
+        # 创建工时记录DataFrame对象
         data = []
         header = []
         for j in range(self.table_model.columnCount()):
@@ -187,11 +187,11 @@ class ManhourWin(QtWidgets.QWidget):
         for i in range(self.table_model.rowCount()):
             row_data = []
             for j in range(self.table_model.columnCount()):
-                print(self.table_model.data(self.table_model.index(i, j), Qt.DisplayRole))
                 row_data.append(self.table_model.data(self.table_model.index(i, j), Qt.DisplayRole))
             data.append(row_data)
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
+        # 打开保存文件夹
         os.startfile(save_path.cwd())
 
     @pyqtSlot()

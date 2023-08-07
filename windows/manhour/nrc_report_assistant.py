@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSlot, QDateTime
 
 from ..ui import Ui_NrcReprotAssistantForm
+from .mh_subtask_win import TABLE_HEADER_MAPPING as subtask_header_mapping
 from windows.image_viewer import ImageViewer
 from windows.input_date_dialog import DateInputDialog
 from utils.database import DatabaseManager
@@ -107,47 +108,85 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         if not read_path:
             return
 
-        """导入NRC工时记录"""
-        # 验证数据字段完整性
-        df = pd.read_excel(read_path, nrows=0)
-        for x in TABLE_HEADER_MAPPING.values():
-            if x not in df.columns:
-                QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
+        # 读取整个Excel文件
+        xlsx = pd.ExcelFile(read_path)
+        """ 验证文件 """
+
+        sheet_header = {'NRC': TABLE_HEADER_MAPPING.values(),
+                        'Subtask': subtask_header_mapping.values()}
+
+        for sheet_name, header in sheet_header.items():
+            if sheet_name not in xlsx.sheet_names:  # 验证页面是否存在
+                QtWidgets.QMessageBox.critical(self, 'Error', f'Sheet `{sheet_name}` not found in excel!')
                 return
-        # 读取并保存数据
+
+            df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name, nrows=0)
+            for x in header:  # 验证数据字段完整性
+                if x not in df_nrc.columns:
+                    msg = f'Column `{x}` not found in {sheet_name} sheet!'
+                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
+                    return
+
+        # 读取NRC
         converters = {
             'Description': lambda y: str(y).strip(),
             'ATA': lambda y: str(y),
             'Total': lambda y: f'{y:.2f}',
             'MH_Changed': lambda y: f'{y:.2f}',
         }
-        df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
+        df_nrc = pd.read_excel(xlsx, sheet_name='NRC', keep_default_na=False, converters=converters)
         header_mh_changed = TABLE_HEADER_MAPPING['mh_changed']
         header_total = TABLE_HEADER_MAPPING['total']
         header_nrcId = TABLE_HEADER_MAPPING['nrc_id']
-        for i in range(df.shape[0]):
-            old_total = float(get_history_report_mh(df.loc[i, header_nrcId]))
-            new_total = float(df.loc[i, header_total])
-            df.loc[i, header_mh_changed] = f'{new_total - old_total:.2f}'
+        for i in range(df_nrc.shape[0]):
+            old_total = float(get_history_report_mh(df_nrc.loc[i, header_nrcId]))
+            new_total = float(df_nrc.loc[i, header_total])
+            df_nrc.loc[i, header_mh_changed] = f'{new_total - old_total:.2f}'
 
+        # 读取Subtask
+        converters = {
+            'Description': lambda y: str(y).strip(),
+            'Item_No': lambda y: str(y),
+            'Mhr': lambda y: f'{y:.2f}',
+        }
+        df_subtask = pd.read_excel(xlsx, sheet_name='Subtask', keep_default_na=False, converters=converters)
+
+        fault = False  # 标记在保存到数据库中是否存在错误
+        # 保存NRC到数据库中
+        self.db.con.transaction()
         sql = f"""REPLACE INTO {self.table_temp}
                   VALUES ({','.join(['?' for _ in range(self.tbReport_model.columnCount())])})"""
         self.query.prepare(sql)
-        fault = False  # 标记在保存到数据库中是否存在错误
-        self.db.con.transaction()
-        for i in range(df.shape[0]):
+        for i in range(df_nrc.shape[0]):
             for field, column in self.field_num.items():
                 header = TABLE_HEADER_MAPPING[field]
-                self.query.addBindValue(df.loc[i, header])
+                self.query.addBindValue(df_nrc.loc[i, header])
             if not self.query.exec_():
                 fault = True
                 break
-        if not fault:  # 如果存入数据库无错误则直接提交否则退回之前的操作
-            self.db.con.commit()
-            QtWidgets.QMessageBox.information(self, 'Information', 'Import NRC successfully!')
-            self.tbReport_model.select()
-        else:
+        if fault:
             self.db.con.rollback()
+            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+            return
+
+        sql = f"""REPLACE INTO MhSubtaskTemp 
+                 VALUES ({','.join(['?' for _ in range(len(subtask_header_mapping))])})"""
+        self.query.prepare(sql)
+        for i in range(df_subtask.shape[0]):
+            for header in subtask_header_mapping.values():
+                self.query.addBindValue(df_subtask.loc[i, header])
+            if not self.query.exec_():
+                fault = True
+                break
+        if fault:
+            self.db.con.rollback()
+            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+            return
+
+        # 若没有错误，则提交数据
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
+        self.tbReport_model.select()
 
     @pyqtSlot()
     def on_btnReportExport_clicked(self):
@@ -158,6 +197,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             return
 
         save_path = Path(save_path).resolve()
+
+        # 创建NRC工时DataFrame对象
         data = []
         header = []
         for j in range(self.tbReport_model.columnCount()):
@@ -168,8 +209,25 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                 print(self.tbReport_model.data(self.tbReport_model.index(i, j), Qt.DisplayRole))
                 row_data.append(self.tbReport_model.data(self.tbReport_model.index(i, j), Qt.DisplayRole))
             data.append(row_data)
-        df = pd.DataFrame(data, columns=header)
-        df.to_excel(save_path, index=False)
+        df_nrc = pd.DataFrame(data, columns=header)
+
+        # 创建subtaskDataFrame对象
+        self.query.exec("SELECT * FROM MhSubtaskTemp")
+        data = []
+        header = [subtask_header_mapping[self.query.record().fieldName(i)] for i in range(self.query.record().count())]
+        while self.query.next():
+            record = [self.query.value(i) for i in range(self.query.record().count())]
+            data.append(record)
+        df_subtask = pd.DataFrame(data, columns=header)
+
+        # 创建Excel Writer对象
+        writer = pd.ExcelWriter(save_path)
+        # 将DataFrame对象写入Excel文件中的不同工作表
+        df_nrc.to_excel(writer, sheet_name='NRC', index=False)
+        df_subtask.to_excel(writer, sheet_name='Subtask', index=False)
+        # 保存Excel文件
+        writer.close()
+        # 打开保存文件夹
         os.startfile(save_path.cwd())
 
     @pyqtSlot()

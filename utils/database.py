@@ -76,6 +76,37 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     mh_changed  REAL DEFAULT (0.0)
 );
 """,
+             """CREATE TABLE IF NOT EXISTS MhSubtask (
+    register    TEXT    DEFAULT "",
+    proj_id     TEXT    DEFAULT "",
+    class       TEXT    DEFAULT "",
+    sheet       TEXT    DEFAULT "",
+    item_no     INTEGER DEFAULT (0),
+    description TEXT    DEFAULT "",
+    jsn         TEXT    DEFAULT "",
+    mhr         REAL    DEFAULT (0.0),
+    trade       TEXT    DEFAULT "",
+    PRIMARY KEY (
+        register,
+        proj_id
+    )
+);""",
+             """CREATE TABLE IF NOT EXISTS MhSubtaskTemp (
+    register    TEXT    DEFAULT "",
+    proj_id     TEXT    DEFAULT "",
+    class       TEXT    DEFAULT "",
+    sheet       TEXT    DEFAULT "",
+    item_no     INTEGER DEFAULT (0),
+    description TEXT    DEFAULT "",
+    jsn         TEXT    DEFAULT "",
+    mhr         REAL    DEFAULT (0.0),
+    trade       TEXT    DEFAULT "",
+    PRIMARY KEY (
+        register,
+        proj_id
+    )
+);
+"""
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
