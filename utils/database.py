@@ -87,8 +87,10 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     mhr         REAL    DEFAULT (0.0),
     trade       TEXT    DEFAULT "",
     PRIMARY KEY (
-        register,
-        proj_id
+        proj_id,
+        item_no,
+        jsn,
+        report_date
     )
 );""",
              """CREATE TABLE IF NOT EXISTS MhSubtaskTemp (

@@ -8,9 +8,13 @@ class DateInputDialog(QtWidgets.QDialog):
         self.ui = Ui_DateInputDialog()
         self.ui.setupUi(self)
         self.ui.dateEdit.setDate(QtCore.QDate.currentDate())
+        self.ui.comboBox.addItems(['INSERT', 'REPLACE'])
 
     def date(self):
         return self.ui.dateEdit.date().toString('yyyy-MM-dd')
 
     def set_label(self, label):
-        self.ui.label.setText(label)
+        self.ui.label_date.setText(label)
+
+    def model(self):
+        return self.ui.comboBox.currentText()

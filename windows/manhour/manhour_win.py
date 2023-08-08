@@ -5,7 +5,7 @@ from PyQt5 import QtWidgets, QtSql
 from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
-from .nrc_report_assistant import NrcReportAssistantWin
+from .nrc_report_assistant_win import NrcReportAssistantWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 

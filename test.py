@@ -2,22 +2,44 @@ from PyQt5.QtCore import QDateTime
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 from utils.database import *
 
-initialize_database()
-print(QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss'))
+class A():
+    def a(self):
+        h_header = self.ui.tbvSubtaskLatest.horizontalHeader()
 
-db = DatabaseManager()
-query = QSqlQuery(db.con)
-query.prepare("INSERT INTO MhCxRemark VALUES (:id,:mh_id,:remark,:crt_user,:crt_dt,:upd_user,:upd_dt)")
-query.bindValue(':id', None)
-query.bindValue(':mh_id', 'test')
-query.bindValue(':remark', 'test')
-query.bindValue(':crt_user', '')
-query.bindValue(':crt_dt', '')
-query.bindValue(':upd_user', QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss'))
-query.bindValue(':upd_dt', QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss'))
-if not query.exec():
-    print(query.lastError().text())
+        # 创建表格模型(不可编辑, 默认可排序)
+        self.tb_subtaskLatest_model = QtSql.QSqlTableModel(self, self.db.con)
+        self.tb_subtaskLatest_model.setTable(self.tb_subtask_temp)
 
-query = db.query("SELECT * FROM MhCxRemark")
-while query.next():
-    print([(query.value(i), type(query.value(i))) for i in range(query.record().count())])
+        # 创建选择模型
+        self.selection_model_subtaskPast = QtCore.QItemSelectionModel(self.tb_subtaskLatest_model)
+
+        # 设置表格数据模型和选择模型
+        self.ui.tbvSubtaskLatest.setModel(self.tb_subtaskLatest_model)
+        self.ui.tbvSubtaskLatest.setSelectionModel(self.selection_model_subtaskPast)
+
+        # 设置表格标题
+        self.subtask_latest_field_num = self.db.get_field_num(self.tb_subtaskLatest_model)  # 获取字段名和序号
+        for field, column in self.subtask_latest_field_num.items():  # 设置字段显示名
+            self.tb_subtaskLatest_model.setHeaderData(column, Qt.Horizontal, self.tb_subtask_header_mapping[field])
+            if field not in ['register', 'class', 'sheet', 'item_no', 'description', 'mhr', 'trade']:
+                self.ui.tbvSubtaskLatest.hideColumn(column)
+
+        # 设置表格视图属性
+        for field, column in self.subtask_latest_field_num.items():  # 设置表格列宽度默认行为
+            if field not in ['description']:
+                h_header.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
+            else:
+                h_header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+
+        # 设置表格视图的水平标题右击弹出菜单
+        h_header.setContextMenuPolicy(Qt.CustomContextMenu)
+        h_header.customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvSubtaskLatest, pos))
+
+        # 连接槽函数
+
+        h_header.sortIndicatorChanged.connect(
+            lambda index, order: self.tb_subtaskLatest_model.setSort(index,
+                                                                   Qt.AscendingOrder if order else Qt.DescendingOrder))
+
+        self.tb_subtaskLatest_model.select()

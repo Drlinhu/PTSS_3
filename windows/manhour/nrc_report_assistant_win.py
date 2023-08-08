@@ -6,6 +6,8 @@ from PyQt5.QtCore import Qt, pyqtSlot, QDateTime
 
 from ..ui import Ui_NrcReprotAssistantForm
 from .mh_subtask_win import TABLE_HEADER_MAPPING as subtask_header_mapping
+from .nrc_subtask_temp_win import NrcSubtaskTempWin
+from .nrc_report_detail_win import NrcReportDetailWin
 from windows.image_viewer import ImageViewer
 from windows.input_date_dialog import DateInputDialog
 from utils.database import DatabaseManager
@@ -62,7 +64,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         # 设置表格视图属性
         for field, column in self.field_num.items():  # 设置表格列宽度默认行为
-            if field not in ['description', 'total']:
+            if field not in ['description']:
                 self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
             else:
                 self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
@@ -292,30 +294,45 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.image_viewer.fit_image()
 
     @pyqtSlot()
-    def on_btnReportDetail_clicked(self):  # TODO
+    def on_btnReportDetail_clicked(self):
         model = self.ui.tableViewReport.selectionModel()
         selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
         if len(selected_rowIndexes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
+        nrc_id = selected_rowIndexes[0].data()
+        self.report_detail = NrcReportDetailWin(nrc_id)
+        self.report_detail.show()
 
     @pyqtSlot()
-    def on_btnReportSubtask_clicked(self):  # TODO
+    def on_btnReportSubtask_clicked(self):
         model = self.ui.tableViewReport.selectionModel()
         selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
         if len(selected_rowIndexes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
+        nrc_id = selected_rowIndexes[0].data()
+        self.subtask_win = NrcSubtaskTempWin(nrc_id)
+        self.subtask_win.show()
 
     @pyqtSlot()
     def on_btnReportSave_clicked(self):
+        if self.tbReport_model.rowCount() < 1:
+            return
+
         # 打开日期输入日期窗口
         dialog = DateInputDialog()
         dialog.set_label('Input report date:')
-        dialog.exec()
+        if not dialog.exec():
+            return
         report_date = dialog.date()
-        # 将temp表的内容存入到正式数据库表中
-        sql = f"""REPLACE INTO {self.table_main} 
+        mode = dialog.model()
+
+        fault = False
+        self.db.con.transaction()
+
+        # 将reportTemp表的内容存入到正式表中
+        sql = f"""{mode} INTO {self.table_main} 
                                 (nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,report_date) 
                     SELECT nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,:dt 
                     FROM {self.table_temp};
@@ -323,11 +340,28 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.query.prepare(sql)
         self.query.bindValue(':dt', report_date)
         if not self.query.exec():
-            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
-        else:
-            QtWidgets.QMessageBox.information(self, 'Information', 'Saved')
-            self.query.exec("DELETE FROM MhNrcReportTemp")
-            self.tbReport_model.select()
+            fault = True
+            QtWidgets.QMessageBox.critical(self, 'Error', 'Save NRC failed:\n' + self.query.lastError().text())
+        if fault:
+            self.db.con.rollback()
+            return
+
+        # 将subtaskTemp表内容存入到正式表中
+        sql = f"""{mode} INTO MhSubtask SELECT *,:dt FROM MhSubtaskTemp"""
+        self.query.prepare(sql)
+        self.query.bindValue(':dt', report_date)
+        if not self.query.exec():
+            fault = True
+            QtWidgets.QMessageBox.critical(self, 'Error', 'Save Subtask failed:\n' + self.query.lastError().text())
+        if fault:
+            self.db.con.rollback()
+            return
+
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Saved')
+        # self.query.exec("DELETE FROM MhNrcReportTemp")
+        # self.query.exec("DELETE FROM MhSubtaskTemp")
+        self.tbReport_model.select()
 
     @pyqtSlot()
     def on_btnHistoryExport_clicked(self):  # TODO
