@@ -63,7 +63,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.query.bindValue(':proj_id', proj_id)
         self.query.bindValue(':jsn', jsn)
         self.query.exec()
-        if self.query.first():
+        if self.query.first() and self.query.value(0):
             self.ui.dateEditPast.setDate(QtCore.QDate(*[int(x) for x in self.query.value(0).split('-')]))
         else:
             self.ui.dateEditPast.setDate(QtCore.QDate.currentDate())
@@ -253,6 +253,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             lambda index, order: self.tb_remark_model.setSort(index,
                                                               Qt.AscendingOrder if order else Qt.DescendingOrder))
 
+        self.tb_remark_model.setFilter(f"mh_id='{self.nrc_id}'")
         self.tb_remark_model.select()
 
     def show_table_header_menu(self, table: QtWidgets.QTableView, pos):
