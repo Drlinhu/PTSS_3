@@ -3,27 +3,29 @@ from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 
 DATABASE = None
 TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
-    mh_id       TEXT    DEFAULT ""
-                        PRIMARY KEY
-                        NOT NULL,
-    class       TEXT    DEFAULT "",
-    pkg_id      TEXT    DEFAULT "",
-    wo          TEXT    DEFAULT "",
-    ac_type     TEXT    DEFAULT "",
-    register    TEXT    DEFAULT "",
-    ref_task    TEXT    DEFAULT "",
-    description TEXT    DEFAULT "",
-    trade       TEXT    DEFAULT "",
-    ata         TEXT    DEFAULT "",
-    area        TEXT    DEFAULT "",
-    zone        TEXT    DEFAULT "",
-    category    TEXT    DEFAULT "",
-    skill       REAL    DEFAULT (0.0),
-    unskill     REAL    DEFAULT (0.0),
-    standard    TEXT    DEFAULT "",
-    dskill      REAL    DEFAULT (0.0),
-    dunskill    REAL    DEFAULT (0.0),
-    remark      TEXT    DEFAULT ""
+    mh_id       TEXT DEFAULT ""
+                     PRIMARY KEY
+                     NOT NULL,
+    class       TEXT DEFAULT "",
+    pkg_id      TEXT DEFAULT "",
+    wo          TEXT DEFAULT "",
+    ac_type     TEXT DEFAULT "",
+    register    TEXT DEFAULT "",
+    ref_task    TEXT DEFAULT "",
+    description TEXT DEFAULT "",
+    trade       TEXT DEFAULT "",
+    ata         TEXT DEFAULT "",
+    area        TEXT DEFAULT "",
+    zone        TEXT DEFAULT "",
+    category    TEXT DEFAULT "",
+    skill       REAL DEFAULT (0.0),
+    unskill     REAL DEFAULT (0.0),
+    standard    TEXT DEFAULT (0),
+    total       REAL DEFAULT (0.0),
+    dskill      REAL DEFAULT (0.0),
+    dunskill    REAL DEFAULT (0.0),
+    dtotal      TEXT DEFAULT (0.0),
+    remark      TEXT DEFAULT ""
 );""",
              """CREATE TABLE IF NOT EXISTS MhCxRemark (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,5 +185,4 @@ class DatabaseManager(object):
     def query(self, query_string):
         query = QSqlQuery(self.__instance.con)  # 使用默认连接进行查询
         query.exec_(query_string)
-        print(query.lastError().text())
         return query

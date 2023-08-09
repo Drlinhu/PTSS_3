@@ -75,7 +75,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.ui.dateEditPast.dateChanged.connect(lambda x: self.show_subtask_past_data())
 
     @pyqtSlot()
-    def on_btnExport_clicked(self):  # TODO
+    def on_btnExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_CX_REMARK_{today}.xlsx'
         save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
@@ -99,29 +99,91 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         os.startfile(save_path.cwd())
 
     @pyqtSlot()
-    def on_btnNew_clicked(self):  # TODO
+    def on_btnNew_clicked(self):
         dialog = CxRemarkInputDialog(mh_id=self.nrc_id)
         dialog.exec()
         self.tb_remark_model.select()
 
     @pyqtSlot()
-    def on_btnAddImage_clicked(self):  # TODO
-        pass
+    def on_btnAddImage_clicked(self):
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "",
+                                                               "Image Files (*.png *.jpg *.bmp)")
+        if not file_paths:
+            return
+
+        sql = """INSERT INTO MhImage
+                 VALUES (:id,:mh_id,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) 
+                                                  FROM MhImage 
+                                                  WHERE mh_id=:mh_id))"""
+        self.query.prepare(sql)
+        self.db.con.transaction()  # 创建事务
+        for file_path in file_paths:
+            with open(file_path, 'rb') as f:
+                image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+            path = Path(file_path)
+
+            self.query.bindValue(':id', None)
+            self.query.bindValue(':mh_id', self.nrc_id)
+            self.query.bindValue(':name', path.name)
+            self.query.bindValue(':image', image_data)
+            if not self.query.exec():
+                QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                self.db.con.rollback()
+                return
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
 
     @pyqtSlot()
-    def on_btnImage_clicked(self):  # TODO
-        pass
+    def on_btnImage_clicked(self):
+        ims = []
+        self.query.prepare("SELECT id,sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
+        self.query.bindValue(':mh_id', self.nrc_id)
+        self.query.exec()
+        while self.query.next():
+            ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
+        if not ims:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No images')
+            return
+
+        self.image_viewer = ImageViewer('MhImage', ims)
+        self.image_viewer.show()
+        self.image_viewer.fit_image()
 
     @pyqtSlot()
-    def on_btnDelete_clicked(self):  # TODO
-        pass
+    def on_btnDelete_clicked(self):
+        sel_model = self.selection_model_remark
+        selected_indexes = sel_model.selectedRows(column=self.remark_field_num['id'])
+        if not selected_indexes:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
+            return
+        choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
+                                               QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if choose == QtWidgets.QMessageBox.Yes:
+            self.query.prepare(f"""DELETE FROM {self.tb_cxRemark} WHERE id=:id""")
+            self.db.con.transaction()
+            for index in selected_indexes:
+                self.query.bindValue(':id', index.data())
+                if not self.query.exec():
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text(), )
+                    self.db.con.rollback()  # 回滚事务
+                    return
+            self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Information', 'Deleted!')
+            self.tb_remark_model.select()
 
-    @pyqtSlot()
-    def on_btnSave_clicked(self):  # TODO
-        pass
+    def on_tbvCxRemark_doubleClicked(self, index: QtCore.QModelIndex):
+        row = index.row()
+        data = {'id_': self.tb_remark_model.index(row, self.remark_field_num['id']).data(),
+                'mh_id': self.tb_remark_model.index(row, self.remark_field_num['mh_id']).data(),
+                'remark': self.tb_remark_model.index(row, self.remark_field_num['remark']).data(),
+                'ct_user': self.tb_remark_model.index(row, self.remark_field_num['create_user']).data(),
+                'ct_dt': self.tb_remark_model.index(row, self.remark_field_num['create_datetime']).data(),
+                'up_user': self.tb_remark_model.index(row, self.remark_field_num['update_user']).data(),
+                'up_dt': self.tb_remark_model.index(row, self.remark_field_num['update_datetime']).data(), }
 
-    def on_tbvCxRemark_doubleClicked(self):
-        pass
+        dialog = CxRemarkInputDialog(**data, ignore_text_changed=True)
+        dialog.exec()
+        self.tb_remark_model.select()
 
     def init_table_subtask_past(self):
         h_header = self.ui.tbvSubtaskPast.horizontalHeader()
@@ -160,7 +222,12 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             lambda index, order: self.tb_subtaskPast_model.setSort(index,
                                                                    Qt.AscendingOrder if order else Qt.DescendingOrder))
 
-        self.show_subtask_past_data()
+        # 显示数据
+        proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
+        past_dt = self.ui.dateEditPast.date().toString('yyyy-MM-dd')
+        filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date='{past_dt}' ORDER BY item_no ASC"""
+        self.tb_subtaskPast_model.setFilter(filter_str)
+        self.tb_subtaskPast_model.select()
 
     def init_table_subtask_latest(self):
         h_header = self.ui.tbvSubtaskLatest.horizontalHeader()
@@ -200,16 +267,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             lambda index, order: self.tb_subtaskLatest_model.setSort(index,
                                                                      Qt.AscendingOrder if order else Qt.DescendingOrder))
 
-        self.show_subtask_latest_data()
-
-    def show_subtask_past_data(self):
-        proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
-        past_dt = self.ui.dateEditPast.date().toString('yyyy-MM-dd')
-        filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date='{past_dt}' ORDER BY item_no ASC"""
-        self.tb_subtaskPast_model.setFilter(filter_str)
-        self.tb_subtaskPast_model.select()
-
-    def show_subtask_latest_data(self):
+        # 显示数据
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
         filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' ORDER BY item_no ASC"""
         self.tb_subtaskLatest_model.setFilter(filter_str)

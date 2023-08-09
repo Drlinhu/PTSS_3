@@ -25,12 +25,12 @@ class ManhourVectorCorpus(object):
         # 从数据库中读取文本作为训练用的文本
         self.read_corpus_from_database()
         # 对语料库进行降噪处理
-        self.denoised_corpus = [self.remove_text_noise(line) for line in self.corpus_desc]
+        self.denoised_corpus = [self.remove_text_noise(line) for line in self.corpus_from_desc]
         # 创建语料库字典
         self.create_corpus_dictionary()
 
     def __iter__(self):
-        for i, line in enumerate(self.corpus_desc):
+        for i, line in enumerate(self.corpus_from_desc):
             # assume there's one document per line, tokens separated by whitespace
             yield self.dictionary.doc2bow(line.lower().split())
 
@@ -92,12 +92,12 @@ class ManhourVectorCorpus(object):
         Read description from database to be used as trained corpus
         :return:
         """
-        self.corpus_desc = []
-        self.id = []
-        self.query.exec(f"SELECT id, description FROM {self.table_name}")
+        self.corpus_from_desc = []
+        self.mh_id = []
+        self.query.exec(f"SELECT mh_id, description FROM {self.table_name}")
         while self.query.next():
-            self.corpus_desc.append(self.query.value('description'))
-            self.id.append(self.query.value('id'))
+            self.corpus_from_desc.append(self.query.value('description'))
+            self.mh_id.append(self.query.value('mh_id'))
 
     @classmethod
     def remove_text_noise(cls, x):

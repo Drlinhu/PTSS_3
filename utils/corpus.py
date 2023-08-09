@@ -10,7 +10,7 @@ __all__ = ["ManhourVectorCorpus"]
 STOP_LIST = set('zadd sadd for a b c d e f g h i j k l m n o p q r s t u v w x y z of the and to in total ea'.split())
 
 
-class ManhourVectorCorpus(object):
+class ManhourVectorCorpus(object):  # TODO 改为更为通用的类
     """
     Construct corpus through class, so that only one vector will be run in RAM.
     It's very friendly to RAM for large corpus.

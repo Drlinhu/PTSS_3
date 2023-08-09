@@ -32,13 +32,16 @@ CELL_BG = {}
 class NrcReportAssistantWin(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(NrcReportAssistantWin, self).__init__(parent)
-        self.ui = Ui_NrcReprotAssistantForm()
-        self.ui.setupUi(self)
-
         self.table_main = "MhNrcReport"
         self.table_temp = "MhNrcReportTemp"
         self.db = DatabaseManager()
         self.query = QtSql.QSqlQuery(self.db.con)
+
+        self.ui = Ui_NrcReprotAssistantForm()
+        self.ui.setupUi(self)
+        self.ui.comboBoxTrade.addItems(['', 'AE', 'AV', 'AI', 'SM', 'PT', 'SS', 'CL', 'GW', ])
+        self.ui.comboBoxStatus.addItems(['', 'WIP', 'OPEN', 'COMP', ])
+        self.ui.comboBoxStandard.addItems(['', 'Y', 'N'])
 
         self.init_report_table()
         self.init_history_table()
@@ -77,23 +80,101 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         self.tbReport_hHeader.sortIndicatorChanged.connect(
             lambda index, order: self.tbReport_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
+        self.ui.lineEditNrcId.returnPressed.connect(self.on_btnSearch_clicked)
+        self.ui.lineEditRefTask.returnPressed.connect(self.on_btnSearch_clicked)
+        self.ui.lineEditArea.returnPressed.connect(self.on_btnSearch_clicked)
+        self.ui.lineEditDesc.returnPressed.connect(self.on_btnSearch_clicked)
+        self.ui.comboBoxRegister.lineEdit().returnPressed.connect(self.on_btnSearch_clicked)
 
+        # 显示数据
         self.tbReport_model.select()
 
     def init_history_table(self):
-        header_labels = ['NRC_ID', 'Register', 'Description', 'Total', 'Simis']
+        header_labels = ['MH_ID', 'Register', 'Description', 'Total', 'Simis']
         self.ui.tableWidgetHistory.setColumnCount(len(header_labels))
         self.ui.tableWidgetHistory.setHorizontalHeaderLabels(header_labels)
 
         h_header = self.ui.tableWidgetHistory.horizontalHeader()
         for col, field in enumerate(header_labels):
             if field in ['Description']:
-                h_header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+                h_header.setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
             else:
-                h_header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+                h_header.setSectionResizeMode(col, QtWidgets.QHeaderView.ResizeToContents)
+
+    @pyqtSlot(bool)
+    def on_checkBoxAll_clicked(self, checked):
+        if checked:
+            self.ui.checkBoxNew.setChecked(False)
+            self.ui.checkBoxChanged.setChecked(False)
+
+    @pyqtSlot(bool)
+    def on_checkBoxNew_clicked(self, checked):
+        if checked:
+            self.ui.checkBoxAll.setChecked(False)
+            self.ui.checkBoxChanged.setChecked(False)
+
+    @pyqtSlot(bool)
+    def on_checkBoxChanged_clicked(self, checked):
+        if checked:
+            self.ui.checkBoxAll.setChecked(False)
+            self.ui.checkBoxNew.setChecked(False)
 
     @pyqtSlot()
-    def on_pushButtonSearch_clicked(self):  # TODO
+    def on_btnSearch_clicked(self):
+        # self.table_main = "MhNrcReport"
+        # self.table_temp = "MhNrcReportTemp"
+        condition = {}
+        if self.ui.lineEditNrcId.text():
+            condition['nrc_id'] = self.ui.lineEditNrcId.text()
+        if self.ui.comboBoxRegister.currentText():
+            condition['register'] = self.ui.comboBoxRegister.currentText()
+        if self.ui.comboBoxTrade.currentText():
+            condition['trade'] = self.ui.comboBoxTrade.currentText()
+        if self.ui.lineEditArea.text():
+            condition['area'] = self.ui.lineEditArea.text()
+        if self.ui.lineEditDesc.text():
+            condition['description'] = self.ui.lineEditDesc.text()
+        if self.ui.comboBoxStatus.currentText():
+            condition['status'] = self.ui.comboBoxStatus.currentText()
+        if self.ui.comboBoxStandard.currentText():
+            condition['standard'] = self.ui.comboBoxStandard.currentText()
+        if self.ui.lineEditRefTask.text():
+            condition['ref_task'] = self.ui.lineEditRefTask.text()
+
+        filter_str = ' AND '.join([f"{field} LIKE '%{value}%'" for field, value in condition.items()])
+        nrc_id = []
+        if self.ui.checkBoxNew.isChecked():
+
+            sql = f"""SELECT DISTINCT t1.nrc_id
+                      FROM {self.table_temp} AS t1
+                      LEFT JOIN {self.table_main} AS t2 ON t2.nrc_id = t1.nrc_id
+                      WHERE report_date IS NULL"""
+            self.query.exec(sql)
+            while self.query.next():
+                nrc_id.append(self.query.value('nrc_id'))
+        elif self.ui.checkBoxChanged.isChecked():
+            fields = ['nrc_id', 'register', 'ref_task', 'description', 'area', 'trade', 'ata', 'status', 'standard',
+                      'total', ]
+            sql = f"""SELECT t1.nrc_id,MAX(report_date)
+                      FROM {self.table_temp} AS t1
+                      JOIN {self.table_main} AS t2 ON t2.nrc_id = t1.nrc_id
+                      WHERE {' OR '.join([f't1.{field}!=t2.{field}' for field in fields])}
+                      GROUP BY t1.nrc_id"""
+            self.query.exec(sql)
+            while self.query.next():
+                nrc_id.append(self.query.value('nrc_id'))
+        else:
+            pass
+
+        if nrc_id and filter_str:
+            filter_str += ' AND (' + ' OR '.join([f'nrc_id={nrc_id}' for nrc_id in nrc_id]) + ')'
+        elif nrc_id and not filter_str:
+            filter_str = ' OR '.join([f"nrc_id='{nrc_id}'" for nrc_id in nrc_id])
+        else:
+            pass
+
+        print(filter_str)
+        self.tbReport_model.setFilter(filter_str)
         self.tbReport_model.select()
 
     @pyqtSlot()
@@ -233,6 +314,41 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         os.startfile(save_path.cwd())
 
     @pyqtSlot()
+    def on_btnReportDelete_clicked(self):
+        sel_model = self.selection_model
+        selected_indexes = sel_model.selectedRows(column=self.field_num['nrc_id'])
+        if not selected_indexes:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
+            return
+        choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
+                                               QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if choose == QtWidgets.QMessageBox.Yes:
+            self.db.con.transaction()
+            # 删除NRC temp
+            self.query.prepare(f"""DELETE FROM {self.table_temp} WHERE nrc_id=:nrc_id""")
+
+            for index in selected_indexes:
+                self.query.bindValue(':nrc_id', index.data())
+                if not self.query.exec():
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text(), )
+                    self.db.con.rollback()  # 回滚事务
+                    return
+            # 删除NRC对应的SUBTASK
+            self.query.prepare(f"""DELETE FROM MhSubtaskTemp WHERE proj_id=:proj_id AND jsn=:jsn""")
+            for index in selected_indexes:
+                nrc_id = index.data()
+                proj_id, jsn = nrc_id[:2], nrc_id[2:6]
+                self.query.bindValue(':proj_id', proj_id)
+                self.query.bindValue(':jsn', jsn)
+                if not self.query.exec():
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text(), )
+                    self.db.con.rollback()  # 回滚事务
+
+            self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Information', 'Deleted!')
+            self.tbReport_model.select()
+
+    @pyqtSlot()
     def on_btnReportAddImage_clicked(self):
         model = self.ui.tableViewReport.selectionModel()
         selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
@@ -306,8 +422,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnReportSubtask_clicked(self):
-        model = self.ui.tableViewReport.selectionModel()
-        selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
+        sel_model = self.ui.tableViewReport.selectionModel()
+        selected_rowIndexes = sel_model.selectedRows(column=self.field_num['nrc_id'])
         if len(selected_rowIndexes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
@@ -359,8 +475,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Saved')
-        # self.query.exec("DELETE FROM MhNrcReportTemp")
-        # self.query.exec("DELETE FROM MhSubtaskTemp")
+        self.query.exec("DELETE FROM MhNrcReportTemp")
+        self.query.exec("DELETE FROM MhSubtaskTemp")
         self.tbReport_model.select()
 
     @pyqtSlot()
@@ -378,6 +494,36 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
     @pyqtSlot()
     def on_btnHistorySubtask_clicked(self):  # TODO
         pass
+
+    def on_tableViewReport_doubleClicked(self, index: QtCore.QModelIndex):
+        row = index.row()
+        desc = self.tbReport_model.index(row, self.field_num['description']).data()
+        sims = self.ui.doubleSpinBoxSim.value()
+        show_count = self.ui.spinBoxHistoryRows.value()
+        corpus = ManhourVectorCorpus()
+        results = corpus.get_similarity_by_latest(search_text=desc, threshold=sims, show_count=show_count)
+
+        # 根据获得结果的位置，进一步查询数据库
+        data = []
+        sql = f"SELECT mh_id,register,description,total FROM MhFinalized LIMIT 1 OFFSET :offset"
+        self.query.prepare(sql)
+        for r in results:
+            self.query.bindValue(":offset", r[0])
+            if self.query.exec() and self.query.first():
+                data.append([self.query.value(i) for i in range(4)] + [f'{r[1]:.2f}'])
+
+        if not data:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No similar history data.')
+            return
+        for x in data:
+            print(x)
+        # 将数据显示在history表格中
+        history_table = self.ui.tableWidgetHistory
+        history_table.setRowCount(len(data))
+        for i in range(history_table.rowCount()):
+            for j in range(history_table.columnCount()):
+                item = QtWidgets.QTableWidgetItem(str(data[i][j]))
+                history_table.setItem(i, j, item)
 
     def show_table_header_menu(self, pos):
         # 创建右键菜单
@@ -403,23 +549,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
-
-    def mark_report_difference(self):
-
-        sql = f"""SELECT * 
-                  FROM {self.table_main} 
-                  WHERE nrc_id=:nrc_id AND report_date=(SELECT MAX(report_date) 
-                                                        FROM {self.table_main} WHERE nrc_id=:nrc_id)
-               """
-        self.query.prepare(sql)
-        for row in range(self.tbReport_model.rowCount()):
-            nrc_id = self.tbReport_model.index(row, self.field_num['nrc_id']).data(Qt.DisplayRole)
-            self.query.bindValue(':nrc_id', nrc_id)
-            self.query.exec()
-            if self.query.first():  # 真表示已存在记录，则比较和存在的记录是否相同
-                print(self.query.value('nrc_id'))
-            else:  # 数据库不存在，表明为新的记录
-                pass
 
 
 class NrcReportSqlTableModel(QtSql.QSqlTableModel):

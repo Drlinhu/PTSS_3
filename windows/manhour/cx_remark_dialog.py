@@ -18,7 +18,7 @@ class CxRemarkInputDialog(QtWidgets.QDialog):
                             'update_datetime': 'Update_Datetime',
                             }
 
-    def __init__(self, parent=None, **kw):
+    def __init__(self, parent=None, ignore_text_changed=False, **kw):
         super(CxRemarkInputDialog, self).__init__(parent)
         self.kw = kw
         self.db = DatabaseManager()
@@ -33,6 +33,7 @@ class CxRemarkInputDialog(QtWidgets.QDialog):
         self.ui = Ui_TextEditDialog()
         self.ui.setupUi(self)
         self.setWindowTitle('Enter CX Remark')
+        self._ignore_text_changed = ignore_text_changed
 
         if self.kw.get('remark') is not None:
             self.ui.plainTextEdit.setPlainText(self.kw.get('remark'))
@@ -41,12 +42,12 @@ class CxRemarkInputDialog(QtWidgets.QDialog):
         fault = False
 
         remark = self.ui.plainTextEdit.toPlainText()
-        if self.kw.get('id') is None:  # 为新记录
+        if self.kw.get('id_') is None:  # 为新记录
             # 读取.ini文件中的值
             ct_dt = QtCore.QDate.currentDate().toString('yyyy-MM-dd')
             sql = f"INSERT INTO {self.table_name} VALUES(:id,:mh_id,:remark,:ct_user,:ct_dt,:up_user,:up_dt)"
             self.query.prepare(sql)
-            self.query.bindValue(':id', None)
+            self.query.bindValue(':id_', None)
             self.query.bindValue(':mh_id', self.kw.get('mh_id'))
             self.query.bindValue(':remark', remark)
             self.query.bindValue(':ct_user', self.current_user)
@@ -56,15 +57,12 @@ class CxRemarkInputDialog(QtWidgets.QDialog):
             if not self.query.exec():
                 fault = True
         else:  # 更新记录
-            ct_dt = self.kw.get('create_datetime')
-            ct_user = self.kw.get('create_user')
-            sql = f"UPDATE {self.table_name} SET remark=:remark WHERE id=:id"
+            sql = f"""UPDATE {self.table_name} 
+                      SET remark=:remark,update_user=:up_user,update_datetime=:up_dt 
+                      WHERE id=:id"""
             self.query.prepare(sql)
-            self.query.bindValue(':id', self.kw.get('id'))
-            self.query.bindValue(':mh_id', self.kw.get('mh_id'))
+            self.query.bindValue(':id', self.kw.get('id_'))
             self.query.bindValue(':remark', remark)
-            self.query.bindValue(':ct_user', ct_user)
-            self.query.bindValue(':ct_dt', ct_dt)
             self.query.bindValue(':up_user', self.update_user)
             self.query.bindValue(':up_dt', self.update_date)
             if not self.query.exec():
@@ -80,5 +78,7 @@ class CxRemarkInputDialog(QtWidgets.QDialog):
 
     @pyqtSlot()
     def on_plainTextEdit_textChanged(self):
-        self.update_date = QtCore.QDate.currentDate().toString('yyyy-MM-dd')
-        self.update_user = self.current_user
+        if not self._ignore_text_changed:  # 初始化时，若本来有内容则不触发
+            self.update_date = QtCore.QDate.currentDate().toString('yyyy-MM-dd')
+            self.update_user = self.current_user
+        self._ignore_text_changed = False  # 初始化后，默认只要改变内容就触发

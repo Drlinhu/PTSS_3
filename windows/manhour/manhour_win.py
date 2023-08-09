@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets, QtSql
 from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
+from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
@@ -24,9 +25,11 @@ TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
                         'category': 'Category',
                         'skill': 'Skill',
                         'unskill': 'Unskill',
+                        'total': 'Total',
                         'standard': 'Standard',
-                        'dskill': 'Dskill',
-                        'dunskill': 'Dunskill',
+                        'dskill': 'D_Skill',
+                        'dunskill': 'D_Unskill',
+                        'dtotal': 'D_Total',
                         'remark': 'Remark',
                         }
 
@@ -84,6 +87,7 @@ class ManhourWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_pushButtonSearch_clicked(self):
+        # self.table_name = "MhFinalized"
         has_nrc = self.ui.checkBoxNrc.isChecked()
         has_rtn = self.ui.checkBoxRtn.isChecked()
         filter_str = None
@@ -93,11 +97,12 @@ class ManhourWin(QtWidgets.QWidget):
             sims = self.ui.doubleSpinBoxSims.value()
             results = corpus.get_similarity_by_latest(search_text=desc, threshold=sims)
 
-            self.query.prepare(f"SELECT mh_id FROM {self.table_name} LIMIT 1 OFFSET :offset")
+            # 获得的结果是数据库记录的位置，而非mh_id，所以还要查询数据库以获得mh_id具体内容
+            self.query.prepare(f"SELECT mh_id,description FROM {self.table_name} LIMIT 1 OFFSET :offset")
             coll_id = []
             for r in results:
-                self.query.bindValue(":offset", r[0] - 1)
-                if self.query.exec() and self.query.next():
+                self.query.bindValue(":offset", r[0])
+                if self.query.exec() and self.query.first():
                     coll_id.append(self.query.value('mh_id'))
             if coll_id:
                 filter_str = ' OR '.join([f"mh_id='{x}'" for x in coll_id])
@@ -119,14 +124,14 @@ class ManhourWin(QtWidgets.QWidget):
             filter_str = ' AND '.join([f"{field} LIKE '%{value}%'" for field, value in condition.items()])
 
         if filter_str:
-            if has_nrc and has_rtn:
-                filter_str += " AND (class='NRC' OR class='RTN')"
-            elif has_nrc and not has_rtn:
+            if has_nrc and not has_rtn:
                 filter_str += " AND class='NRC'"
             elif not has_nrc and has_rtn:
                 filter_str += " AND class='RTN'"
-            else:
+            elif not has_nrc and not has_rtn:
                 filter_str += " AND class!='NRC' AND class!='RTN'"
+            else:
+                pass
         self.table_model.setFilter(filter_str)
         self.table_model.select()
 
@@ -215,15 +220,26 @@ class ManhourWin(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.critical(self, 'Error', self.db.con.lastError().text())
 
     @pyqtSlot()
+    def on_pushButtonDetail_clicked(self):  # TODO
+        pass
+
+    @pyqtSlot()
     def on_pushButtonSubtask_clicked(self):
+        sel_model = self.ui.tableView.selectionModel()
+        selected_rowIndexes = sel_model.selectedRows(column=self.field_num['mh_id'])
+        if len(selected_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        mh_id = selected_rowIndexes[0].data()
+        self.subtask_win = NrcSubtaskTempWin(mh_id)
+        self.subtask_win.show()
+
+    @pyqtSlot()
+    def on_pushButtonAddImage_clicked(self):  # TODO
         pass
 
     @pyqtSlot()
-    def on_pushButtonAddImage_clicked(self):
-        pass
-
-    @pyqtSlot()
-    def on_pushButtonImage_clicked(self):
+    def on_pushButtonImage_clicked(self):  # TODO
         pass
 
     def on_radioButtonBySimi_toggled(self, checked):
