@@ -24,7 +24,7 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     total       REAL DEFAULT (0.0),
     dskill      REAL DEFAULT (0.0),
     dunskill    REAL DEFAULT (0.0),
-    dtotal      TEXT DEFAULT (0.0),
+    dtotal      REAL DEFAULT (0.0),
     remark      TEXT DEFAULT ""
 );""",
              """CREATE TABLE IF NOT EXISTS MhCxRemark (

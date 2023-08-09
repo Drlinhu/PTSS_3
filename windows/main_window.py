@@ -6,7 +6,7 @@ from PyQt5 import QtGui
 
 from utils.database import *
 from .ui import Ui_MainWindow
-from windows.manhour import ManhourWin
+from windows.manhour.manhour_win import ManhourWin
 
 
 class MainWindow(QMainWindow):

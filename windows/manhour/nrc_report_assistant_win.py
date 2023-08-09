@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSlot, QDateTime
 
 from ..ui import Ui_NrcReprotAssistantForm
+from .mh_finalized_detail_win import ManhourFinalizedWin
 from .mh_subtask_win import TABLE_HEADER_MAPPING as subtask_header_mapping
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_detail_win import NrcReportDetailWin
@@ -93,6 +94,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         header_labels = ['MH_ID', 'Register', 'Description', 'Total', 'Simis']
         self.ui.tableWidgetHistory.setColumnCount(len(header_labels))
         self.ui.tableWidgetHistory.setHorizontalHeaderLabels(header_labels)
+        self.ui.tableWidgetHistory.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
         h_header = self.ui.tableWidgetHistory.horizontalHeader()
         for col, field in enumerate(header_labels):
@@ -173,7 +175,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         else:
             pass
 
-        print(filter_str)
         self.tbReport_model.setFilter(filter_str)
         self.tbReport_model.select()
 
@@ -289,7 +290,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         for i in range(self.tbReport_model.rowCount()):
             row_data = []
             for j in range(self.tbReport_model.columnCount()):
-                print(self.tbReport_model.data(self.tbReport_model.index(i, j), Qt.DisplayRole))
                 row_data.append(self.tbReport_model.data(self.tbReport_model.index(i, j), Qt.DisplayRole))
             data.append(row_data)
         df_nrc = pd.DataFrame(data, columns=header)
@@ -350,9 +350,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnReportAddImage_clicked(self):
-        model = self.ui.tableViewReport.selectionModel()
-        selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
-        if not selected_rowIndexes:
+        sel_model = self.ui.tableViewReport.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=self.field_num['nrc_id'])
+        if not sel_rowIndexes:
             QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
             return
 
@@ -364,38 +364,32 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         sql = """INSERT INTO MhImage
                  VALUES (:id,:nrc_id,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) FROM MhImage WHERE mh_id=:nrc_id))"""
         self.db.con.transaction()  # 创建事务
-        fault = False
         self.query.prepare(sql)
         for file_path in file_paths:
             with open(file_path, 'rb') as f:
                 image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
             path = Path(file_path)
-            for index in selected_rowIndexes:
+            for index in sel_rowIndexes:
                 self.query.bindValue(':id', None)
                 self.query.bindValue(':nrc_id', index.data())
                 self.query.bindValue(':name', path.name)
                 self.query.bindValue(':image', image_data)
                 if not self.query.exec():
-                    fault = True
-                    print(self.query.executedQuery())
-                    break
-            if fault:
-                break
-        if not fault:
-            self.db.con.commit()
-            QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
-        else:
-            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                    self.db.con.rollback()
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                    return
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
 
     @pyqtSlot()
     def on_btnReportImage_clicked(self):
-        model = self.ui.tableViewReport.selectionModel()
-        selected_rowIndexes = model.selectedRows(column=self.field_num['nrc_id'])
-        if len(selected_rowIndexes) != 1:
+        sel_model = self.ui.tableViewReport.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=self.field_num['nrc_id'])
+        if len(sel_rowIndexes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
         ims = []
-        mh_id = selected_rowIndexes[0].data()
+        mh_id = sel_rowIndexes[0].data()
         self.query.prepare("SELECT id,sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
         self.query.bindValue(':mh_id', mh_id)
         self.query.exec()
@@ -480,20 +474,77 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.tbReport_model.select()
 
     @pyqtSlot()
-    def on_btnHistoryExport_clicked(self):  # TODO
-        pass
+    def on_btnHistoryExport_clicked(self):
+        today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
+        filename = f'MH_Similarity_{today}.xlsx'
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        if not save_path:
+            return
+
+        save_path = Path(save_path).resolve()
+
+        data = []
+        table = self.ui.tableWidgetHistory
+        header = [table.horizontalHeaderItem(i).data(Qt.DisplayRole) for i in range(table.columnCount())]
+        for i in range(table.rowCount()):
+            temp = [
+                float(table.item(i, j).data(Qt.DisplayRole)) if j in [3, 4] else table.item(i, j).data(Qt.DisplayRole)
+                for j in range(table.columnCount())]
+            data.append(temp)
+
+        df = pd.DataFrame(data, columns=header)
+        df.to_excel(save_path, index=False)
+        # 打开保存文件夹
+        os.startfile(save_path.cwd())
 
     @pyqtSlot()
-    def on_btnHistoryImage_clicked(self):  # TODO
-        pass
+    def on_btnHistoryImage_clicked(self):
+        sel_model = self.ui.tableWidgetHistory.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=0)
+        if len(sel_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        ims = []
+        mh_id = sel_rowIndexes[0].data()
+        self.query.prepare("SELECT id,sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
+        self.query.bindValue(':mh_id', mh_id)
+        self.query.exec()
+        while self.query.next():
+            ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
+        if not ims:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No images')
+            return
+
+        self.image_viewer = ImageViewer('MhImage', ims)
+        self.image_viewer.show()
+        self.image_viewer.fit_image()
 
     @pyqtSlot()
-    def on_btnHistoryDetail_clicked(self):  # TODO
-        pass
+    def on_btnHistoryDetail_clicked(self):
+        sel_model = self.ui.tableWidgetHistory.selectionModel()
+        if len(sel_model.selectedRows(0)) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        mh_id = sel_model.selectedIndexes()[0].data()
+        self.query.prepare("SELECT * FROM MhFinalized WHERE mh_id=:mh_id")
+        self.query.bindValue(':mh_id', mh_id)
+        self.query.exec()
+        self.query.first()
+        data = {self.query.record().fieldName(i): self.query.value(i) for i in range(self.query.record().count())}
+        self.detail_win = ManhourFinalizedWin()
+        self.detail_win.setData(**data)
+        self.detail_win.show()
 
     @pyqtSlot()
-    def on_btnHistorySubtask_clicked(self):  # TODO
-        pass
+    def on_btnHistorySubtask_clicked(self):
+        sel_model = self.ui.tableWidgetHistory.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=self.field_num['nrc_id'])
+        if len(sel_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        nrc_id = sel_rowIndexes[0].data()
+        self.subtask_win = NrcSubtaskTempWin(nrc_id)
+        self.subtask_win.show()
 
     def on_tableViewReport_doubleClicked(self, index: QtCore.QModelIndex):
         row = index.row()
@@ -515,8 +566,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         if not data:
             QtWidgets.QMessageBox.information(self, 'Information', 'No similar history data.')
             return
-        for x in data:
-            print(x)
         # 将数据显示在history表格中
         history_table = self.ui.tableWidgetHistory
         history_table.setRowCount(len(data))

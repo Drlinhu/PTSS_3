@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
 import pandas as pd
-from PyQt5 import QtWidgets, QtSql
+from PyQt5 import QtWidgets, QtSql, QtCore
 from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
+from ..image_viewer import ImageViewer
+from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
 from utils.database import DatabaseManager
@@ -220,8 +222,16 @@ class ManhourWin(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.critical(self, 'Error', self.db.con.lastError().text())
 
     @pyqtSlot()
-    def on_pushButtonDetail_clicked(self):  # TODO
-        pass
+    def on_pushButtonDetail_clicked(self):
+        sel_model = self.ui.tableView.selectionModel()
+        if len(sel_model.selectedRows(self.field_num['mh_id'])) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        fields = list(TABLE_HEADER_MAPPING.keys())
+        data = {fields[i]: idx.data(Qt.DisplayRole) for i, idx in enumerate(sel_model.selectedIndexes())}
+        self.detail_win = ManhourFinalizedWin()
+        self.detail_win.setData(**data)
+        self.detail_win.show()
 
     @pyqtSlot()
     def on_pushButtonSubtask_clicked(self):
@@ -235,12 +245,58 @@ class ManhourWin(QtWidgets.QWidget):
         self.subtask_win.show()
 
     @pyqtSlot()
-    def on_pushButtonAddImage_clicked(self):  # TODO
-        pass
+    def on_pushButtonAddImage_clicked(self):
+        sel_model = self.ui.tableView.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=self.field_num['mh_id'])
+        if not sel_rowIndexes:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
+            return
+
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "",
+                                                               "Image Files (*.png *.jpg *.bmp)")
+        if not file_paths:
+            return
+        sql = """INSERT INTO MhImage
+                         VALUES (:id,:mh_id,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) FROM MhImage WHERE mh_id=:mh_id))"""
+        self.db.con.transaction()  # 创建事务
+        self.query.prepare(sql)
+        for file_path in file_paths:
+            with open(file_path, 'rb') as f:
+                image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+            path = Path(file_path)
+            for index in sel_rowIndexes:
+                self.query.bindValue(':id', None)
+                self.query.bindValue(':mh_id', index.data())
+                self.query.bindValue(':name', path.name)
+                self.query.bindValue(':image', image_data)
+                if not self.query.exec():
+                    self.db.con.rollback()
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                    return
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
 
     @pyqtSlot()
-    def on_pushButtonImage_clicked(self):  # TODO
-        pass
+    def on_pushButtonImage_clicked(self):
+        sel_model = self.ui.tableView.selectionModel()
+        sel_rowIndexes = sel_model.selectedRows(column=self.field_num['mh_id'])
+        if len(sel_rowIndexes) != 1:
+            QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
+            return
+        ims = []
+        mh_id = sel_rowIndexes[0].data()
+        self.query.prepare("SELECT id,sheet,name,image FROM MhImage WHERE mh_id=:mh_id ORDER BY sheet ASC")
+        self.query.bindValue(':mh_id', mh_id)
+        self.query.exec()
+        while self.query.next():
+            ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
+        if not ims:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No images')
+            return
+
+        self.image_viewer = ImageViewer('MhImage', ims)
+        self.image_viewer.show()
+        self.image_viewer.fit_image()
 
     def on_radioButtonBySimi_toggled(self, checked):
         if checked:
