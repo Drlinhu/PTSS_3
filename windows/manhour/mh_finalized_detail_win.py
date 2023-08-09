@@ -42,13 +42,13 @@ class ManhourFinalizedWin(QtWidgets.QWidget):
         self.ui.plainTextEditRemark.setPlainText(kw.get('remark'))
 
     @pyqtSlot()
-    def on_btnSubtask_clicked(self):  # TODO
+    def on_btnSubtask_clicked(self):
         nrc_id = self.ui.lineEditMhId.text()
         self.subtask_win = NrcSubtaskTempWin(nrc_id)
         self.subtask_win.show()
 
     @pyqtSlot()
-    def on_btnImage_clicked(self):  # TODO
+    def on_btnImage_clicked(self):
         ims = []
         mh_id = self.ui.lineEditMhId.text()
 
