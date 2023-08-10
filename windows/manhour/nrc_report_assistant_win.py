@@ -180,7 +180,11 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
     @pyqtSlot()
     def on_btnReportImport_clicked(self):
         def get_history_report_mh(nrc_id):
-            self.query.prepare(f"SELECT total FROM {self.table_main} WHERE nrc_id=:nrc_id")
+            sql_ = f"""SELECT total FROM {self.table_main} 
+                       WHERE nrc_id=:nrc_id AND report_date=(SELECT MAX(report_date) 
+                                                             FROM {self.table_main} 
+                                                             WHERE nrc_id=:nrc_id)"""
+            self.query.prepare(sql_)
             self.query.bindValue(':nrc_id', nrc_id)
             self.query.exec()
             if self.query.first():
@@ -310,7 +314,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         # 保存Excel文件
         writer.close()
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_btnReportDelete_clicked(self):
@@ -494,7 +498,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_btnHistoryImage_clicked(self):

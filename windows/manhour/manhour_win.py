@@ -6,7 +6,6 @@ from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from ..image_viewer import ImageViewer
-from ..progress_bar import ProgressBarDialog
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
@@ -95,7 +94,9 @@ class ManhourWin(QtWidgets.QWidget):
         # self.table_name = "MhFinalized"
         has_nrc = self.ui.checkBoxNrc.isChecked()
         has_rtn = self.ui.checkBoxRtn.isChecked()
-        filter_str = None
+        filter_str = ''
+        coll_id = []
+
         if self.ui.radioButtonBySimi.isChecked():
             desc = self.ui.lineEditSearchDesc.text()
             corpus = ManhourVectorCorpus()
@@ -104,7 +105,6 @@ class ManhourWin(QtWidgets.QWidget):
 
             # 获得的结果是数据库记录的位置，而非mh_id，所以还要查询数据库以获得mh_id具体内容
             self.query.prepare(f"SELECT mh_id,description FROM {self.table_name} LIMIT 1 OFFSET :offset")
-            coll_id = []
             for r in results:
                 self.query.bindValue(":offset", r[0])
                 if self.query.exec() and self.query.first():
@@ -137,6 +137,17 @@ class ManhourWin(QtWidgets.QWidget):
                 filter_str += " AND class!='NRC' AND class!='RTN'"
             else:
                 pass
+        else:
+            if has_nrc and not has_rtn:
+                filter_str = "class='NRC'"
+            elif not has_nrc and has_rtn:
+                filter_str = "class='RTN'"
+            elif not has_nrc and not has_rtn:
+                filter_str = "class!='NRC' AND class!='RTN'"
+            else:
+                filter_str = "class='NRC' OR class='RTN'"
+
+        print(filter_str)
         self.table_model.setFilter(filter_str)
         self.table_model.select()
 
@@ -147,6 +158,7 @@ class ManhourWin(QtWidgets.QWidget):
             return
 
         df = pd.read_excel(read_path, nrows=0)
+
         # 验证数据字段完整性
         for x in TABLE_HEADER_MAPPING.values():
             if x not in df.columns:
@@ -203,7 +215,7 @@ class ManhourWin(QtWidgets.QWidget):
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_pushButtonDelete_clicked(self):

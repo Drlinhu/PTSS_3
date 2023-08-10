@@ -58,7 +58,7 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     def init_table(self):
         self.h_header = self.ui.tableView.horizontalHeader()

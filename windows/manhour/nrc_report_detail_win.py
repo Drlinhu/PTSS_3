@@ -96,7 +96,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_btnNew_clicked(self):
@@ -221,13 +221,8 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         h_header.sortIndicatorChanged.connect(
             lambda index, order: self.tb_subtaskPast_model.setSort(index,
                                                                    Qt.AscendingOrder if order else Qt.DescendingOrder))
+        self.show_subtask_past_data()
 
-        # 显示数据
-        proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
-        past_dt = self.ui.dateEditPast.date().toString('yyyy-MM-dd')
-        filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date='{past_dt}' ORDER BY item_no ASC"""
-        self.tb_subtaskPast_model.setFilter(filter_str)
-        self.tb_subtaskPast_model.select()
 
     def init_table_subtask_latest(self):
         h_header = self.ui.tbvSubtaskLatest.horizontalHeader()
@@ -339,3 +334,11 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+    def show_subtask_past_data(self):
+        # 显示数据
+        proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
+        past_dt = self.ui.dateEditPast.date().toString('yyyy-MM-dd')
+        filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date='{past_dt}' ORDER BY item_no ASC"""
+        self.tb_subtaskPast_model.setFilter(filter_str)
+        self.tb_subtaskPast_model.select()

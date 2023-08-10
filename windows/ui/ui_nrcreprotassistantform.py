@@ -233,7 +233,7 @@ class Ui_NrcReprotAssistantForm(object):
         spacerItem2 = QtWidgets.QSpacerItem(20, 195, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem2)
         self.btnReportSave = QtWidgets.QPushButton(self.frame_2)
-        self.btnReportSave.setEnabled(False)
+        self.btnReportSave.setEnabled(True)
         self.btnReportSave.setText("")
         icon8 = QtGui.QIcon()
         icon8.addPixmap(QtGui.QPixmap(":/icon/save.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)

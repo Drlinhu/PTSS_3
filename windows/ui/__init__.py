@@ -5,6 +5,5 @@ from .ui_mhsubtaskform import Ui_MhSubtaskForm
 from .ui_subtaskform import Ui_SubtaskForm
 from .ui_nrcreportdetailform import Ui_NrcReportDetailForm
 from .ui_texteditdialog import Ui_TextEditDialog
-from .ui_progressbardialog import Ui_ProgressBarDialog
 from .ui_nrcreportdetailform import Ui_NrcReportDetailForm
 from .ui_mhfinalizeddetailform import Ui_MhFinalizedDetailForm
