@@ -94,7 +94,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         header_labels = ['MH_ID', 'Register', 'Description', 'Total', 'Simis']
         self.ui.tableWidgetHistory.setColumnCount(len(header_labels))
         self.ui.tableWidgetHistory.setHorizontalHeaderLabels(header_labels)
-        self.ui.tableWidgetHistory.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
         h_header = self.ui.tableWidgetHistory.horizontalHeader()
         for col, field in enumerate(header_labels):

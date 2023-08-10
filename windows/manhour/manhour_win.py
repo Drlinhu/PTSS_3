@@ -6,6 +6,7 @@ from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from ..image_viewer import ImageViewer
+from ..progress_bar import ProgressBarDialog
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
@@ -37,6 +38,8 @@ TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
 
 
 class ManhourWin(QtWidgets.QWidget):
+    progress_signal = QtCore.pyqtSignal(int)
+
     def __init__(self, parent=None):
         super(ManhourWin, self).__init__(parent)
         self.ui = Ui_ManHourForm()
@@ -156,26 +159,26 @@ class ManhourWin(QtWidgets.QWidget):
                       'Zone': lambda y: str(y),
                       'Skill': lambda y: f'{y:.2f}',
                       'Unskill': lambda y: f'{y:.2f}',
-                      'Dskill': lambda y: f'{y:.2f}',
-                      'Dunskill': lambda y: f'{y:.2f}', }
+                      'Total': lambda y: f'{y:.2f}',
+                      'D_Skill': lambda y: f'{y:.2f}',
+                      'D_Unskill': lambda y: f'{y:.2f}',
+                      'D_Total': lambda y: f'{y:.2f}', }
         df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
         query = QtSql.QSqlQuery(self.db.con)
         query.prepare(f"""REPLACE INTO {self.table_name}
                           VALUES ({','.join(['?' for _ in range(self.table_model.columnCount())])})""")
-        fault = False  # 标记在保存到数据库中是否存在错误
         self.db.con.transaction()
         for i in range(df.shape[0]):
             for field, column in self.field_num.items():
                 header = TABLE_HEADER_MAPPING[field]
                 query.addBindValue(df.loc[i, header])
             if not query.exec_():
-                fault = True
-                break
-        if not fault:  # 如果存入数据库无错误则直接提交否则退回之前的操作
-            self.db.con.commit()
-            QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
-        else:
-            self.db.con.rollback()
+                self.db.con.rollback()
+                QtWidgets.QMessageBox.critical(self, 'Error', f'Failed\n{self.query.lastError().text()}')
+                return
+
+        self.db.con.commit()
+        QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
 
     @pyqtSlot()
     def on_pushButtonExport_clicked(self):
@@ -191,6 +194,7 @@ class ManhourWin(QtWidgets.QWidget):
         header = []
         for j in range(self.table_model.columnCount()):
             header.append(self.table_model.headerData(j, Qt.Horizontal, Qt.DisplayRole))
+
         for i in range(self.table_model.rowCount()):
             row_data = []
             for j in range(self.table_model.columnCount()):

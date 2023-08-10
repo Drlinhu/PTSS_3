@@ -1,10 +1,8 @@
-import os
-from pathlib import Path
-import pandas as pd
 from PyQt5 import QtWidgets, QtSql
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
+from PyQt5.QtCore import pyqtSlot
 
 from ..ui import Ui_MhFinalizedDetailForm
+from ..image_viewer import ImageViewer
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from utils.database import DatabaseManager
 
@@ -35,7 +33,7 @@ class ManhourFinalizedWin(QtWidgets.QWidget):
         self.ui.lineEditSkill.setText(f"{kw.get('skill'):.2f}")
         self.ui.lineEditUnskill.setText(f"{kw.get('unskill'):.2f}")
         self.ui.lineEditTotal.setText(f"{kw.get('total'):.2f}")
-        # self.ui.kw.get('standard')
+        self.ui.lineEditStandard.setText(kw.get('standard'))
         self.ui.lineEditDskill.setText(f"{kw.get('dskill'):.2f}")
         self.ui.lineEditDunskill.setText(f"{kw.get('dunskill'):.2f}")
         self.ui.lineEditDtotal.setText(f"{kw.get('dtotal'):.2f}")

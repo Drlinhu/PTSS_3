@@ -110,6 +110,7 @@ class Ui_NrcReprotAssistantForm(object):
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
         self.tableWidgetHistory = QtWidgets.QTableWidget(self.frame_7)
         self.tableWidgetHistory.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tableWidgetHistory.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tableWidgetHistory.setObjectName("tableWidgetHistory")
         self.tableWidgetHistory.setColumnCount(0)
         self.tableWidgetHistory.setRowCount(0)
