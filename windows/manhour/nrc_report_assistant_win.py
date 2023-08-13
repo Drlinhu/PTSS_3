@@ -9,6 +9,7 @@ from .mh_finalized_detail_win import ManhourFinalizedWin
 from .mh_subtask_win import TABLE_HEADER_MAPPING as subtask_header_mapping
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_detail_win import NrcReportDetailWin
+from .nrc_manhour_trend import NrcManhourTrendWin
 from windows.image_viewer import ImageViewer
 from windows.input_date_dialog import DateInputDialog
 from utils.database import DatabaseManager
@@ -46,6 +47,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         self.init_report_table()
         self.init_history_table()
+        self.show_report_summary()
 
     def init_report_table(self):  # 初始化表格
         self.tbReport_hHeader = self.ui.tableViewReport.horizontalHeader()
@@ -78,7 +80,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.tbReport_hHeader.customContextMenuRequested.connect(self.show_table_header_menu)
 
         # 连接槽函数
-
         self.tbReport_hHeader.sortIndicatorChanged.connect(
             lambda index, order: self.tbReport_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
         self.ui.lineEditNrcId.returnPressed.connect(self.on_btnSearch_clicked)
@@ -270,6 +271,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
         self.tbReport_model.select()
+        self.show_report_summary()
 
     @pyqtSlot()
     def on_btnReportExport_clicked(self):
@@ -310,7 +312,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         # 保存Excel文件
         writer.close()
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_btnReportDelete_clicked(self):
@@ -423,6 +425,11 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         nrc_id = selected_rowIndexes[0].data()
         self.subtask_win = NrcSubtaskTempWin(nrc_id)
         self.subtask_win.show()
+
+    @pyqtSlot()
+    def on_btnReportCalenderCheck_clicked(self):
+        self.nrc_trend_win = NrcManhourTrendWin()
+        self.nrc_trend_win.show()
 
     @pyqtSlot()
     def on_btnReportSave_clicked(self):
@@ -598,6 +605,48 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         else:
             self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
 
+    def show_report_summary(self):
+        # self.table_main = "MhNrcReport"
+        # self.table_temp = "MhNrcReportTemp"
+
+        # 读取当前report工时总额
+        sql = f""" SELECT SUM(total) FROM {self.table_temp} """
+        self.query.exec(sql)
+        self.query.first()
+        cur_total = self.query.value(0) if self.query.value(0) else 0
+
+        # 获取机号和对应的Project ID
+        self.query.exec(f"SELECT nrc_id,register FROM {self.table_temp} LIMIT 1")
+        if self.query.first():
+            proj_id = self.query.value('nrc_id')[:2]
+            register = self.query.value('register')
+
+            # 读取report历史最新日期的工时总额
+            sql = f""" SELECT SUM(total) 
+                       FROM {self.table_main}
+                       WHERE register=:register AND nrc_id LIKE :proj_id AND report_date=(
+                                                                SELECT MAX(report_date) 
+                                                                FROM {self.table_main}
+                                                                WHERE register=:register AND nrc_id LIKE :proj_id)"""
+            self.query.prepare(sql)
+            self.query.bindValue(':register', register)
+            self.query.bindValue(':proj_id', proj_id + '%')
+            self.query.exec()
+            self.query.first()
+            last_total = self.query.value(0) if self.query.value(0) else 0
+        else:
+            last_total = 0
+
+        # 显示数据
+        self.ui.lineEditTotalCurrent.setText(f'{cur_total:.2f}')
+        self.ui.lineEditTotalLast.setText(f'{last_total:.2f}')
+        changed_total = cur_total - last_total
+        self.ui.lineEditTotalChanged.setText(f'{changed_total:.2f}')
+        if changed_total > 0:
+            self.ui.lineEditTotalChanged.setStyleSheet("background-color: #FFC0CB;")  # pink
+        else:
+            self.ui.lineEditTotalChanged.setStyleSheet("background-color: #90EE90;")  # light green
+
 
 class NrcReportSqlTableModel(QtSql.QSqlTableModel):
     def __init__(self, parent, QObject=None, *args, **kwargs):
@@ -629,7 +678,12 @@ class NrcReportSqlTableModel(QtSql.QSqlTableModel):
 
         if role == Qt.TextColorRole:
             value = index.data(Qt.DisplayRole)
-            if index.column() == self.fieldIndex('mh_changed') and value != 0:
-                return QtGui.QColor(255, 0, 0)  # 红色
+            if index.column() == self.fieldIndex('mh_changed'):
+                if value > 0:
+                    return QtGui.QColor(255, 0, 0)  # 红色
+                elif value < 0:
+                    return QtGui.QColor(0, 255, 0)  # 绿色
+                else:
+                    return QtGui.QColor(0, 0, 0)  # 黑色
 
         return super().data(index, role)

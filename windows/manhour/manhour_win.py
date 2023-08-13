@@ -6,10 +6,10 @@ from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from ..image_viewer import ImageViewer
-from ..progress_bar import ProgressBarDialog
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
+from .nrc_manhour_trend import NrcManhourTrendWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 
@@ -89,6 +89,19 @@ class ManhourWin(QtWidgets.QWidget):
     def on_toolButtonNrcReportAssistant_clicked(self):
         self.nrc_reportAssistant_win = NrcReportAssistantWin()
         self.nrc_reportAssistant_win.show()
+
+    @pyqtSlot()
+    def on_toolButtonNrcMhTrend_clicked(self):
+        self.nrc_trend_win = NrcManhourTrendWin()
+        self.nrc_trend_win.show()
+
+    @pyqtSlot()
+    def on_toolButtonRtnQuotationAssistant_clicked(self):  # TODO
+        pass
+
+    @pyqtSlot()
+    def on_toolButtonRtnMhTrend_clicked(self):  # TODO
+        pass
 
     @pyqtSlot()
     def on_pushButtonSearch_clicked(self):

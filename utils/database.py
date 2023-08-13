@@ -110,7 +110,18 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
         proj_id
     )
 );
-"""
+""",
+             """CREATE TABLE IF NOT EXISTS RegisterProjectId (
+    register   TEXT DEFAULT "",
+    proj_id    TEXT DEFAULT "",
+    start_date TEXT DEFAULT "",
+    end_date   TEXT DEFAULT "",
+    status     TEXT DEFAULT "",
+    PRIMARY KEY (
+        register,
+        proj_id
+    )
+);"""
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
