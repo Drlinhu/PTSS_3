@@ -150,6 +150,15 @@ class ManhourWin(QtWidgets.QWidget):
                 filter_str += " AND class!='NRC' AND class!='RTN'"
             else:
                 pass
+        else:
+            if has_nrc and not has_rtn:
+                filter_str = "class='NRC'"
+            elif not has_nrc and has_rtn:
+                filter_str = "class='RTN'"
+            elif not has_nrc and not has_rtn:
+                filter_str = "class!='NRC' AND class!='RTN'"
+            else:
+                filter_str = "class='NRC' OR class='RTN'"
         self.table_model.setFilter(filter_str)
         self.table_model.select()
 
