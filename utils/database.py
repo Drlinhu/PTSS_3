@@ -106,8 +106,9 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     mhr         REAL    DEFAULT (0.0),
     trade       TEXT    DEFAULT "",
     PRIMARY KEY (
-        register,
-        proj_id
+        proj_id,
+        item_no,
+        jsn
     )
 );
 """,
@@ -121,7 +122,7 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
         register,
         proj_id
     )
-);"""
+);""",
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

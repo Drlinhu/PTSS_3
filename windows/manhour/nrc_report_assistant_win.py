@@ -195,7 +195,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
-
+        # 导入前先清空临时表格
+        self.query.exec("DELETE FROM MhNrcReportTemp")
+        self.query.exec("DELETE FROM MhSubtaskTemp")
         # 读取整个Excel文件
         xlsx = pd.ExcelFile(read_path)
         """ 验证文件 """
@@ -258,7 +260,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             return
 
         sql = f"""REPLACE INTO MhSubtaskTemp 
-                 VALUES ({','.join(['?' for _ in range(len(subtask_header_mapping))])})"""
+                  VALUES ({','.join(['?' for _ in range(len(subtask_header_mapping))])})"""
         self.query.prepare(sql)
         for i in range(df_subtask.shape[0]):
             for header in subtask_header_mapping.values():
@@ -482,6 +484,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.query.exec("DELETE FROM MhNrcReportTemp")
         self.query.exec("DELETE FROM MhSubtaskTemp")
         self.tbReport_model.select()
+        self.show_report_summary()
 
     @pyqtSlot()
     def on_btnHistoryExport_clicked(self):

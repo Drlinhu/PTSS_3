@@ -81,9 +81,13 @@ class ManhourWin(QtWidgets.QWidget):
         self.ui.tableView.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.ui.tableView.horizontalHeader().customContextMenuRequested.connect(self.show_table_header_menu)
 
-        # 连接槽函数
-        self.ui.tableView.horizontalHeader().sortIndicatorChanged.connect(
-            lambda index, order: self.table_model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
+    def on_tableView_doubleClicked(self, index):
+        sel_model = self.ui.tableView.selectionModel()
+        fields = list(TABLE_HEADER_MAPPING.keys())
+        data = {fields[i]: idx.data(Qt.DisplayRole) for i, idx in enumerate(sel_model.selectedIndexes())}
+        self.detail_win = ManhourFinalizedWin()
+        self.detail_win.setData(**data)
+        self.detail_win.show()
 
     @pyqtSlot()
     def on_toolButtonNrcReportAssistant_clicked(self):
@@ -225,7 +229,7 @@ class ManhourWin(QtWidgets.QWidget):
         df = pd.DataFrame(data, columns=header)
         df.to_excel(save_path, index=False)
         # 打开保存文件夹
-        os.startfile(save_path.cwd())
+        os.startfile(save_path.parent)
 
     @pyqtSlot()
     def on_pushButtonDelete_clicked(self):
