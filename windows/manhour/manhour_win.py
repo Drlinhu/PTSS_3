@@ -51,6 +51,14 @@ class ManhourWin(QtWidgets.QWidget):
 
         self.init_table()  # 初始化表格
 
+        # 连接槽函数
+        self.ui.lineEditSearchId.returnPressed.connect(self.on_pushButtonSearch_clicked)
+        self.ui.lineEditSearchRefTask.returnPressed.connect(self.on_pushButtonSearch_clicked)
+        self.ui.lineEditSearchRegister.returnPressed.connect(self.on_pushButtonSearch_clicked)
+        self.ui.lineEditSearchDesc.returnPressed.connect(self.on_pushButtonSearch_clicked)
+        self.ui.lineEditSearchAcType.returnPressed.connect(self.on_pushButtonSearch_clicked)
+        self.ui.lineEditSearchPkgId.returnPressed.connect(self.on_pushButtonSearch_clicked)
+
     def init_table(self):
 
         # 创建表格模型(不可编辑, 默认可排序)
@@ -143,6 +151,8 @@ class ManhourWin(QtWidgets.QWidget):
                 condition['pkg_id'] = self.ui.lineEditSearchPkgId.text()
             if self.ui.lineEditSearchDesc.text():
                 condition['description'] = self.ui.lineEditSearchDesc.text()
+            if self.ui.lineEditSearchRefTask.text():
+                condition['ref_task'] = self.ui.lineEditSearchRefTask.text()
             filter_str = ' AND '.join([f"{field} LIKE '%{value}%'" for field, value in condition.items()])
 
         if filter_str:

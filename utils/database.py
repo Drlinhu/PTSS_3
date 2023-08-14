@@ -26,7 +26,8 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     dunskill    REAL DEFAULT (0.0),
     dtotal      REAL DEFAULT (0.0),
     remark      TEXT DEFAULT ""
-);""",
+);
+""",
              """CREATE TABLE IF NOT EXISTS MhCxRemark (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     mh_id           TEXT,
@@ -63,7 +64,8 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
         nrc_id,
         report_date
     )
-);""",
+);
+""",
              """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
     nrc_id      TEXT PRIMARY KEY,
     register    TEXT DEFAULT "",
@@ -88,13 +90,15 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     jsn         TEXT    DEFAULT "",
     mhr         REAL    DEFAULT (0.0),
     trade       TEXT    DEFAULT "",
+    report_date TEXT,
     PRIMARY KEY (
         proj_id,
         item_no,
         jsn,
         report_date
     )
-);""",
+);
+""",
              """CREATE TABLE IF NOT EXISTS MhSubtaskTemp (
     register    TEXT    DEFAULT "",
     proj_id     TEXT    DEFAULT "",
@@ -122,7 +126,8 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
         register,
         proj_id
     )
-);""",
+);
+""",
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
