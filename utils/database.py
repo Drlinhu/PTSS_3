@@ -2,18 +2,7 @@ from PyQt5.QtCore import QSettings
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 
 DATABASE = None
-TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                mh_id           TEXT,
-                remark          TEXT    DEFAULT "",
-                create_user     TEXT,
-                create_datetime TEXT    DEFAULT (datetime('now') ) 
-                                   NOT NULL,
-                update_user     TEXT,
-                update_datetime TEXT    DEFAULT (datetime('now') ) 
-                                   NOT NULL
-);""",
-             """CREATE TABLE NOT EXISTS MhFinalized (
+TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     mh_id       TEXT DEFAULT ""
                      PRIMARY KEY
                      NOT NULL,
@@ -31,12 +20,23 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
     category    TEXT DEFAULT "",
     skill       REAL DEFAULT (0.0),
     unskill     REAL DEFAULT (0.0),
-    total       REAL DEFAULT (0.0),
     standard    TEXT DEFAULT (0),
+    total       REAL DEFAULT (0.0),
     dskill      REAL DEFAULT (0.0),
     dunskill    REAL DEFAULT (0.0),
     dtotal      REAL DEFAULT (0.0),
     remark      TEXT DEFAULT ""
+);""",
+             """CREATE TABLE IF NOT EXISTS MhCxRemark (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mh_id           TEXT,
+    remark          TEXT    DEFAULT "",
+    create_user     TEXT,
+    create_datetime TEXT    DEFAULT (datetime('now') ) 
+                            NOT NULL,
+    update_user     TEXT,
+    update_datetime TEXT    DEFAULT (datetime('now') ) 
+                            NOT NULL
 );
 """,
              """CREATE TABLE IF NOT EXISTS MhImage (
@@ -63,8 +63,7 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
         nrc_id,
         report_date
     )
-);
-""",
+);""",
              """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
     nrc_id      TEXT PRIMARY KEY,
     register    TEXT DEFAULT "",
@@ -76,7 +75,7 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
     status      TEXT DEFAULT "",
     standard    TEXT,
     total       REAL DEFAULT (0.0),
-    mh_changed  REAL DEFAULT (0.0) 
+    mh_changed  REAL DEFAULT (0.0)
 );
 """,
              """CREATE TABLE IF NOT EXISTS MhSubtask (
@@ -89,7 +88,6 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
     jsn         TEXT    DEFAULT "",
     mhr         REAL    DEFAULT (0.0),
     trade       TEXT    DEFAULT "",
-    report_date TEXT,
     PRIMARY KEY (
         proj_id,
         item_no,
@@ -108,12 +106,22 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhCxRemark (
     mhr         REAL    DEFAULT (0.0),
     trade       TEXT    DEFAULT "",
     PRIMARY KEY (
-        proj_id,
-        item_no,
-        jsn
+        register,
+        proj_id
     )
 );
 """,
+             """CREATE TABLE IF NOT EXISTS RegisterProjectId (
+    register   TEXT DEFAULT "",
+    proj_id    TEXT DEFAULT "",
+    start_date TEXT DEFAULT "",
+    end_date   TEXT DEFAULT "",
+    status     TEXT DEFAULT "",
+    PRIMARY KEY (
+        register,
+        proj_id
+    )
+);"""
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
