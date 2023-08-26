@@ -10,6 +10,7 @@ from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
 from .nrc_manhour_trend import NrcManhourTrendWin
+from .nrc_standardItem_win import NrcStandardItemWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 
@@ -106,6 +107,11 @@ class ManhourWin(QtWidgets.QWidget):
     def on_toolButtonNrcMhTrend_clicked(self):
         self.nrc_trend_win = NrcManhourTrendWin()
         self.nrc_trend_win.show()
+
+    @pyqtSlot()
+    def on_toolButtonNrcStandard_clicked(self):
+        self.nrc_standardItem_win = NrcStandardItemWin()
+        self.nrc_standardItem_win.show()
 
     @pyqtSlot()
     def on_toolButtonRtnQuotationAssistant_clicked(self):  # TODO
