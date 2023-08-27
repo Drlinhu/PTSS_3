@@ -128,6 +128,54 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     )
 );
 """,
+             """CREATE TABLE IF NOT EXISTS MhNrcStandardItem (
+    item_no     TEXT PRIMARY KEY
+                     NOT NULL,
+    ac_type     TEXT DEFAULT "",
+    description TEXT DEFAULT "",
+    work_area   TEXT DEFAULT ""
+);""",
+             """CREATE TABLE IF NOT EXISTS MhNrcStandardImage (
+    id      INTEGER PRIMARY KEY,
+    item_no TEXT    REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                           ON UPDATE CASCADE,
+    name    TEXT    DEFAULT "",
+    image   BLOB,
+    sheet   INTEGER DEFAULT (1) 
+);""",
+             """CREATE TABLE IF NOT EXISTS MhNrcStandardMax (
+    item_no TEXT PRIMARY KEY
+                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                        ON UPDATE CASCADE,
+    ai      REAL DEFAULT (0.0),
+    ae      REAL DEFAULT (0.0),
+    av      REAL DEFAULT (0.0),
+    ss      REAL DEFAULT (0.0),
+    pt      REAL DEFAULT (0.0),
+    sm      REAL DEFAULT (0.0),
+    gw      REAL DEFAULT (0.0),
+    cl      REAL DEFAULT (0.0) 
+);""",
+             """CREATE TABLE IF NOT EXISTS MhNrcStandardMin (
+    item_no TEXT PRIMARY KEY
+                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                        ON UPDATE CASCADE,
+    ai      REAL DEFAULT (0.0),
+    ae      REAL DEFAULT (0.0),
+    av      REAL DEFAULT (0.0),
+    ss      REAL DEFAULT (0.0),
+    pt      REAL DEFAULT (0.0),
+    sm      REAL DEFAULT (0.0),
+    gw      REAL DEFAULT (0.0),
+    cl      REAL DEFAULT (0.0) 
+);""",
+             """CREATE TABLE IF NOT EXISTS MhNrcStandardRemark (
+    item_no TEXT PRIMARY KEY
+                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                        ON UPDATE CASCADE,
+    remark  TEXT DEFAULT ""
+);
+"""
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
