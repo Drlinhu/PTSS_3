@@ -47,6 +47,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.ui.doubleSpinBoxCLMax.valueChanged.connect(self.set_total_mhr)
         self.ui.doubleSpinBoxSSMin.valueChanged.connect(self.set_total_mhr)
         self.ui.doubleSpinBoxSSMax.valueChanged.connect(self.set_total_mhr)
+        self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearch_clicked)
 
     def on_tbvNrcItem_clicked(self, index: QtCore.QModelIndex):
         item_no = self.model.index(index.row(), self.field_num['item_no']).data()
@@ -109,7 +110,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         if self.ui.cbbSearchAcType.currentText():
             condition['ac_type'] = self.ui.cbbSearchAcType.currentText()
         if self.ui.lineEditSearchDesc.text():
-            condition['desc'] = self.ui.lineEditSearchDesc.text()
+            condition['description'] = self.ui.lineEditSearchDesc.text()
 
         filter_str = ' AND '.join([f"{field} LIKE '%{v}%'" for field, v in condition.items()])
         self.model.setFilter(filter_str)
@@ -284,7 +285,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.get_next_itemNo()
 
     @pyqtSlot()
-    def on_btnAddImage_clicked(self):  # TODO
+    def on_btnAddImage_clicked(self):
         sel_idxes = self.selection_model.selectedRows(column=self.field_num['item_no'])
         if not sel_idxes:
             QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
@@ -317,7 +318,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
 
     @pyqtSlot()
-    def on_btnImage_clicked(self):  # TODO
+    def on_btnImage_clicked(self):
         sel_idxes = self.selection_model.selectedRows(column=self.field_num['item_no'])
         if len(sel_idxes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
@@ -407,14 +408,14 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         sql = f"""REPLACE INTO {self.tb_item_max} VALUES (:item_no,:ai,:ae,:av,:ss,:pt,:sm,:gw,:cl)"""
         self.query.prepare(sql)
         self.query.bindValue(':item_no', item_no)
-        self.query.bindValue(':ai', self.ui.doubleSpinBoxAIMin.value())
-        self.query.bindValue(':ae', self.ui.doubleSpinBoxAEMin.value())
-        self.query.bindValue(':av', self.ui.doubleSpinBoxAVMin.value())
-        self.query.bindValue(':ss', self.ui.doubleSpinBoxSSMin.value())
-        self.query.bindValue(':pt', self.ui.doubleSpinBoxPTMin.value())
-        self.query.bindValue(':sm', self.ui.doubleSpinBoxSMMin.value())
-        self.query.bindValue(':gw', self.ui.doubleSpinBoxGWMin.value())
-        self.query.bindValue(':cl', self.ui.doubleSpinBoxCLMin.value())
+        self.query.bindValue(':ai', self.ui.doubleSpinBoxAIMax.value())
+        self.query.bindValue(':ae', self.ui.doubleSpinBoxAEMax.value())
+        self.query.bindValue(':av', self.ui.doubleSpinBoxAVMax.value())
+        self.query.bindValue(':ss', self.ui.doubleSpinBoxSSMax.value())
+        self.query.bindValue(':pt', self.ui.doubleSpinBoxPTMax.value())
+        self.query.bindValue(':sm', self.ui.doubleSpinBoxSMMax.value())
+        self.query.bindValue(':gw', self.ui.doubleSpinBoxGWMax.value())
+        self.query.bindValue(':cl', self.ui.doubleSpinBoxCLMax.value())
         if not self.query.exec():
             QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
             self.db.con.rollback()
@@ -432,6 +433,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
 
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Saved.')
+        self.on_btnSearch_clicked()
         # 设置编辑控件不可编辑
         self.ui.cbbAcType.setEnabled(False)
         self.ui.cbbWorkArea.setEnabled(False)
