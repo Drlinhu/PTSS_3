@@ -56,7 +56,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.setWindowTitle(f'Manhour Detail - {nrc_id}')
         self.ui.dateEditToday.setDate(QtCore.QDate.currentDate())
 
-        # 设置past 空i教案data值
+        # 设置past report data值
         self.ui.dateEditPast.lineEdit().setReadOnly(True)
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
         self.query.prepare(f"SELECT MAX(report_date) FROM {self.tb_subtask_main} WHERE proj_id=:proj_id AND jsn=:jsn")
@@ -67,6 +67,13 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             self.ui.dateEditPast.setDate(QtCore.QDate(*[int(x) for x in self.query.value(0).split('-')]))
         else:
             self.ui.dateEditPast.setDate(QtCore.QDate.currentDate())
+
+        # 设置description
+        self.query.prepare("SELECT description FROM MhNrcReport WHERE nrc_id=:nrc_id")
+        self.query.bindValue(":nrc_id", self.nrc_id)
+        self.query.exec()
+        if self.query.first():
+            self.ui.lineEditDesc.setText(self.query.value(0))
 
         self.init_table_subtask_past()
         self.init_table_subtask_latest()
@@ -216,13 +223,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         h_header.customContextMenuRequested.connect(
             lambda pos: self.show_table_header_menu(self.ui.tbvSubtaskPast, pos))
 
-        # 连接槽函数
-
-        h_header.sortIndicatorChanged.connect(
-            lambda index, order: self.tb_subtaskPast_model.setSort(index,
-                                                                   Qt.AscendingOrder if order else Qt.DescendingOrder))
         self.show_subtask_past_data()
-
 
     def init_table_subtask_latest(self):
         h_header = self.ui.tbvSubtaskLatest.horizontalHeader()
@@ -255,12 +256,6 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         h_header.setContextMenuPolicy(Qt.CustomContextMenu)
         h_header.customContextMenuRequested.connect(
             lambda pos: self.show_table_header_menu(self.ui.tbvSubtaskLatest, pos))
-
-        # 连接槽函数
-
-        h_header.sortIndicatorChanged.connect(
-            lambda index, order: self.tb_subtaskLatest_model.setSort(index,
-                                                                     Qt.AscendingOrder if order else Qt.DescendingOrder))
 
         # 显示数据
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
@@ -299,12 +294,6 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         # 设置表格视图的水平标题右击弹出菜单
         h_header.setContextMenuPolicy(Qt.CustomContextMenu)
         h_header.customContextMenuRequested.connect(lambda pos: self.show_table_header_menu(self.ui.tbvCxRemark, pos))
-
-        # 连接槽函数
-
-        h_header.sortIndicatorChanged.connect(
-            lambda index, order: self.tb_remark_model.setSort(index,
-                                                              Qt.AscendingOrder if order else Qt.DescendingOrder))
 
         self.tb_remark_model.setFilter(f"mh_id='{self.nrc_id}'")
         self.tb_remark_model.select()

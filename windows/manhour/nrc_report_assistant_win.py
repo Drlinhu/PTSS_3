@@ -195,6 +195,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
+
         # 导入前先清空临时表格
         self.query.exec("DELETE FROM MhNrcReportTemp")
         self.query.exec("DELETE FROM MhSubtaskTemp")
@@ -216,7 +217,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                     msg = f'Column `{x}` not found in {sheet_name} sheet!'
                     QtWidgets.QMessageBox.critical(self, 'Error', msg)
                     return
-
         # 读取NRC
         converters = {
             'Description': lambda y: str(y).strip(),

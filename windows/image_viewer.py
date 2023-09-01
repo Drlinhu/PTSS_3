@@ -44,8 +44,8 @@ class ImageViewer(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnDelete_clicked(self):
-        choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
-                                               QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        options = QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?', options)
         if choose == QtWidgets.QMessageBox.Yes:
             self.query.prepare(f"DELETE FROM {self.table_name} WHERE id=:id")
             self.query.bindValue(':id', self.ims[self.im_index]['id'])
@@ -53,6 +53,10 @@ class ImageViewer(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.information(self, 'Information', 'Delete successfully!')
                 self.ims.pop(self.im_index)
                 self.im_count = len(self.ims)
+                if not self.ims:
+                    QtWidgets.QMessageBox.information(self, 'Information', 'No images.')
+                    self.close()
+                    return
                 self.show_image()
             else:
                 QtWidgets.QMessageBox.critical(self, 'Information', f'Delete failed!\n{self.query.lastError().text()}')

@@ -35,6 +35,7 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
 
         # 初始化表格
         self.init_table()
+        self.set_totalWidget_mhr()
 
     @pyqtSlot()
     def on_btnReportExport_clicked(self):
@@ -88,10 +89,6 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
         self.h_header.setContextMenuPolicy(Qt.CustomContextMenu)  # 表格标题
         self.h_header.customContextMenuRequested.connect(self.show_table_header_menu)
 
-        # 槽函数
-        self.h_header.sortIndicatorChanged.connect(
-            lambda index, order: self.model.setSort(index, Qt.AscendingOrder if order else Qt.DescendingOrder))
-
     def show_table_header_menu(self, pos):
         # 创建右键菜单
         menu = QtWidgets.QMenu(self)
@@ -116,3 +113,9 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
             self.h_header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             self.h_header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+    def set_totalWidget_mhr(self):
+        mhr = 0
+        for row in range(self.model.rowCount()):
+            mhr += self.model.index(row, self.field_num['mhr']).data()
+        self.ui.doubleSpinBoxTotal.setValue(mhr)

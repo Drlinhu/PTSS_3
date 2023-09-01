@@ -18,6 +18,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(NrcStandardItemWin, self).__init__(parent)
         self.is_saved = True
+        self.new_ims = []
         self.db = DatabaseManager()
         self.query = QtSql.QSqlQuery(self.db.con)
         self.tb_item_name = 'MhNrcStandardItem'
@@ -280,6 +281,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         # 设置编辑控件可编辑
         self.ui.cbbAcType.setEnabled(True)
         self.ui.cbbWorkArea.setEnabled(True)
+        self.ui.btnNewImage.setEnabled(True)
         self.set_editorWidget_readOnly(False)
         self.reset_editorWidget_value()
         self.get_next_itemNo()
@@ -335,7 +337,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, 'Information', 'No images')
             return
 
-        self.image_viewer = ImageViewer('MhImage', ims)
+        self.image_viewer = ImageViewer('MhNrcStandardImage', ims)
         self.image_viewer.show()
         self.image_viewer.fit_image()
 
@@ -361,6 +363,14 @@ class NrcStandardItemWin(QtWidgets.QWidget):
                     return
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Deleted successfully')
+
+    @pyqtSlot()
+    def on_btnNewImage_clicked(self):
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "",
+                                                               "Image Files (*.png *.jpg *.bmp)")
+        if not file_paths:
+            return
+        self.new_ims = file_paths
 
     @pyqtSlot()
     def on_btnSave_clicked(self):
@@ -431,6 +441,25 @@ class NrcStandardItemWin(QtWidgets.QWidget):
             self.db.con.rollback()
             return
 
+        # 保存图片
+
+        sql = """INSERT INTO MhNrcStandardImage
+                 VALUES (:id,:item_no,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) 
+                                                    FROM MhNrcStandardImage WHERE item_no=:item_no))"""
+        self.query.prepare(sql)
+        for im in self.new_ims:
+            with open(im, 'rb') as f:
+                image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+            path = Path(im)
+            self.query.bindValue(':id', None)
+            self.query.bindValue(':item_no', item_no)
+            self.query.bindValue(':name', path.name)
+            self.query.bindValue(':image', image_data)
+            if not self.query.exec():
+                self.db.con.rollback()
+                QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                return
+
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Saved.')
         self.on_btnSearch_clicked()
@@ -440,6 +469,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.set_editorWidget_readOnly(True)
         self.reset_editorWidget_value()
         self.ui.btnSave.setEnabled(False)
+        self.ui.btnNewImage.setEnabled(False)
 
     def init_table(self):
         h_header = self.ui.tbvNrcItem.horizontalHeader()
