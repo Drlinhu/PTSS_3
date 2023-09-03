@@ -174,8 +174,42 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
                  REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
                                                         ON UPDATE CASCADE,
     remark  TEXT DEFAULT ""
+);""",
+             """CREATE TABLE IF NOT EXISTS Procedure (
+    proc_id     TEXT PRIMARY KEY,
+    description TEXT DEFAULT ""
 );
-"""
+""",
+             """CREATE TABLE IF NOT EXISTS ProcedureImage (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    name    TEXT,
+    image   BLOB,
+    sheet   INTEGER DEFAULT (1) 
+);""",
+             """CREATE TABLE IF NOT EXISTS ProcedureIcw (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    icw     TEXT,
+    mhr     REAL    DEFAULT (0.0),
+    remark  TEXT    DEFAULT ""
+);
+""",
+             """CREATE TABLE IF NOT EXISTS ProcedurePanel (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    panel   TEXT
+);
+""",
+             """CREATE TABLE IF NOT EXISTS ProcedureRef (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    ref     TEXT
+);""",
              ]
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

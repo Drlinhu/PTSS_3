@@ -57,6 +57,8 @@ class ImageViewer(QtWidgets.QWidget):
                     QtWidgets.QMessageBox.information(self, 'Information', 'No images.')
                     self.close()
                     return
+                if self.im_index == len(self.ims):
+                    self.im_index = len(self.ims)-1
                 self.show_image()
             else:
                 QtWidgets.QMessageBox.critical(self, 'Information', f'Delete failed!\n{self.query.lastError().text()}')

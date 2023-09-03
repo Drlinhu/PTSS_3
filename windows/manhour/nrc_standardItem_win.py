@@ -18,7 +18,6 @@ class NrcStandardItemWin(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(NrcStandardItemWin, self).__init__(parent)
         self.is_saved = True
-        self.new_ims = []
         self.db = DatabaseManager()
         self.query = QtSql.QSqlQuery(self.db.con)
         self.tb_item_name = 'MhNrcStandardItem'
@@ -26,6 +25,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.tb_item_min = 'MhNrcStandardMin'
         self.tb_item_remark = 'MhNrcStandardRemark'
         self.tb_item_image = 'MhNrcStandardRemark'
+        self.new_ims = []
 
         self.ui = Ui_NrcStandardForm()
         self.ui.setupUi(self)
@@ -363,6 +363,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
                     return
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Deleted successfully')
+        self.on_btnSearch_clicked()
 
     @pyqtSlot()
     def on_btnNewImage_clicked(self):
@@ -442,7 +443,6 @@ class NrcStandardItemWin(QtWidgets.QWidget):
             return
 
         # 保存图片
-
         sql = """INSERT INTO MhNrcStandardImage
                  VALUES (:id,:item_no,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) 
                                                     FROM MhNrcStandardImage WHERE item_no=:item_no))"""
@@ -463,7 +463,9 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Saved.')
         self.on_btnSearch_clicked()
+
         # 设置编辑控件不可编辑
+        self.new_ims = []
         self.ui.cbbAcType.setEnabled(False)
         self.ui.cbbWorkArea.setEnabled(False)
         self.set_editorWidget_readOnly(True)

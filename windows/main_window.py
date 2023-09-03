@@ -7,6 +7,7 @@ from PyQt5 import QtGui
 from utils.database import *
 from .ui import Ui_MainWindow
 from windows.manhour.manhour_win import ManhourWin
+from windows.procedure.procedure_win import ProcedureWin
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +36,14 @@ class MainWindow(QMainWindow):
             return
         aForm = self.ui.tabWidget.widget(index)
         aForm.close()
+
+    @pyqtSlot()
+    def on_actionProcedure_triggered(self):
+        form = ProcedureWin(self)
+        form.setAttribute(Qt.WA_DeleteOnClose)
+        curIndex = self.ui.tabWidget.addTab(form, "Procedure")
+        self.ui.tabWidget.setCurrentIndex(curIndex)
+        self.ui.tabWidget.setVisible(True)
 
     @pyqtSlot()
     def on_actionManhour_triggered(self):
