@@ -55,7 +55,12 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         model.removeRows(0, model.rowCount())
 
         while self.query.next():
-            temp = [QStandardItem(str(self.query.value(i))) for i in range(model.columnCount())]
+            temp = []
+            for i in range(model.columnCount()):
+                item = self.query.value(i)
+                if isinstance(item,(float,int)):
+                    item = f"{item:.2f}"
+                temp.append(QStandardItem(item))
             model.appendRow(temp)
 
         # 设置当前最新记录的total

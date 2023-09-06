@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
-from PyQt5.QtCore import Qt, pyqtSlot, QDateTime
+from PyQt5.QtCore import Qt, pyqtSlot, QDateTime, QSettings
 
 from ..ui import Ui_NrcReprotAssistantForm
 from .mh_finalized_detail_win import ManhourFinalizedWin
@@ -192,58 +192,126 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                 return self.query.value('total')
             return 0.0
 
+        # 导入前先清空临时表格
+        self.query.exec("DELETE FROM MhNrcReportTemp")
+        self.query.exec("DELETE FROM MhSubtaskTemp")
+
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
 
-        # 导入前先清空临时表格
-        self.query.exec("DELETE FROM MhNrcReportTemp")
-        self.query.exec("DELETE FROM MhSubtaskTemp")
-        # 读取整个Excel文件
-        xlsx = pd.ExcelFile(read_path)
-        """ 验证文件 """
-
-        sheet_header = {'NRC': TABLE_HEADER_MAPPING.values(),
-                        'Subtask': subtask_header_mapping.values()}
-
-        for sheet_name, header in sheet_header.items():
-            if sheet_name not in xlsx.sheet_names:  # 验证页面是否存在
-                QtWidgets.QMessageBox.critical(self, 'Error', f'Sheet `{sheet_name}` not found in excel!')
+        register = ""
+        while not register:
+            register, ok = QtWidgets.QInputDialog.getText(self, 'Input Dialog', ' Register:')
+            if not ok:
                 return
+            if register == "":
+                QtWidgets.QMessageBox.critical(self, 'Error', 'Register must not be empty.')
 
-            df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name, nrows=0)
-            for x in header:  # 验证数据字段完整性
-                if x not in df_nrc.columns:
-                    msg = f'Column `{x}` not found in {sheet_name} sheet!'
+        # # 读取整个Excel文件
+        # xlsx = pd.ExcelFile(read_path)
+        # """ 验证文件 """
+        #
+        # sheet_header = {'NRC': TABLE_HEADER_MAPPING.values(),
+        #                 'Subtask': subtask_header_mapping.values()}
+        #
+        # for sheet_name, header in sheet_header.items():
+        #     if sheet_name not in xlsx.sheet_names:  # 验证页面是否存在
+        #         QtWidgets.QMessageBox.critical(self, 'Error', f'Sheet `{sheet_name}` not found in excel!')
+        #         return
+        #
+        #     df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name, nrows=0)
+        #     for x in header:  # 验证数据字段完整性
+        #         if x not in df_nrc.columns:
+        #             msg = f'Column `{x}` not found in {sheet_name} sheet!'
+        #             QtWidgets.QMessageBox.critical(self, 'Error', msg)
+        #             return
+        # 读取NRC
+
+        sheet_name_nrc = None
+        sheet_name_subtask = None
+
+        settings = QSettings("nrc_daily_report.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
+        """ 识别文件 """
+        xlsx = pd.ExcelFile(read_path)  # 读取整个页面
+        # 识别NRC页面名称
+        if not isinstance(settings.value("sheet_name/nrc"), list):
+            msg = 'Value in nrc_daily_report.ini must be end with `,`'
+            QtWidgets.QMessageBox.critical(self, 'Error', msg)
+            return
+        values = [x.lower() for x in settings.value("sheet_name/nrc")]
+        for _ in range(values.count('')):
+            values.remove('')
+        for sheet_name in xlsx.sheet_names:
+            if sheet_name.lower() in values:
+                sheet_name_nrc = sheet_name
+                break
+
+        # 识别SUBTASK页面名称
+        if not isinstance(settings.value("sheet_name/subtask"), list):
+            msg = 'Value in nrc_daily_report.ini must be end with `,`'
+            QtWidgets.QMessageBox.critical(self, 'Error', msg)
+            return
+        values = [x.lower() for x in settings.value("sheet_name/subtask")]
+        for _ in range(values.count('')):
+            values.remove('')
+        for sheet_name in xlsx.sheet_names:
+            if sheet_name.lower() in values:
+                sheet_name_subtask = sheet_name
+                break
+
+        if sheet_name_nrc is None:
+            msg = 'NRC page not found.'
+            QtWidgets.QMessageBox.critical(self, 'Error', msg)
+            return
+
+        # 识别NRC列名
+        df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name_nrc, nrows=0)
+        header_nrc = {}
+        settings.beginGroup('header_nrc')
+        for field in settings.allKeys():
+            options: list = settings.value(field)
+            for _ in range(options.count('')):
+                options.remove('')
+            for option in options:
+                if option not in df_nrc.columns:
+                    msg = f'{field} in NRC page not found.'
                     QtWidgets.QMessageBox.critical(self, 'Error', msg)
                     return
-        # 读取NRC
+                header_nrc[field] = option
+
+        # 读取NRC数据
         converters = {
-            'Description': lambda y: str(y).strip(),
-            'ATA': lambda y: str(y),
-            'Total': lambda y: f'{y:.2f}',
-            'MH_Changed': lambda y: f'{y:.2f}',
+            header_nrc['Description']: lambda y: str(y).strip(),
+            header_nrc['ATA']: lambda y: str(y),
+            header_nrc['Total']: lambda y: f'{y:.2f}',
         }
-        df_nrc = pd.read_excel(xlsx, sheet_name='NRC', keep_default_na=False, converters=converters)
+        df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name_nrc, keep_default_na=False, converters=converters)
+
+        # 修改指定列的列名
+        for field in settings.allKeys():
+            options: list = settings.value(field)
+            for _ in range(options.count('')):
+                options.remove('')
+            for option in options:
+                if option in df_nrc.columns:
+                    df_nrc.rename(columns={option: field}, inplace=True)
+        settings.endGroup()
+
+        # 增加两列
         header_mh_changed = TABLE_HEADER_MAPPING['mh_changed']
         header_total = TABLE_HEADER_MAPPING['total']
         header_nrcId = TABLE_HEADER_MAPPING['nrc_id']
+        df_nrc['Standard'] = ['N' for _ in range(df_nrc.shape[0])]
+        df_nrc['Register'] = [register for _ in range(df_nrc.shape[0])]
+        df_nrc[header_mh_changed] = ['0.0' for _ in range(df_nrc.shape[0])]
         for i in range(df_nrc.shape[0]):
             old_total = float(get_history_report_mh(df_nrc.loc[i, header_nrcId]))
             new_total = float(df_nrc.loc[i, header_total])
             df_nrc.loc[i, header_mh_changed] = f'{new_total - old_total:.2f}'
 
-        # 读取Subtask
-        converters = {
-            'Description': lambda y: str(y).strip(),
-            'Item_No': lambda y: str(y),
-            'Mhr': lambda y: f'{y:.2f}',
-        }
-        df_subtask = pd.read_excel(xlsx, sheet_name='Subtask', keep_default_na=False, converters=converters)
-
-        fault = False  # 标记在保存到数据库中是否存在错误
         # 保存NRC到数据库中
-        self.db.con.transaction()
+        self.db.con.transaction() # 开启数据库事务
         sql = f"""REPLACE INTO {self.table_temp}
                   VALUES ({','.join(['?' for _ in range(self.tbReport_model.columnCount())])})"""
         self.query.prepare(sql)
@@ -252,12 +320,52 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                 header = TABLE_HEADER_MAPPING[field]
                 self.query.addBindValue(df_nrc.loc[i, header])
             if not self.query.exec_():
-                fault = True
-                break
-        if fault:
-            self.db.con.rollback()
-            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                self.db.con.rollback()
+                return
+
+        if sheet_name_subtask is None:  # 若没有subtask页则不执行后续代码
+            self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
             return
+
+        # 识别SUBTASK列名
+        df_subtask = pd.read_excel(xlsx, sheet_name=sheet_name_subtask, nrows=0)
+        header_subtask = {}
+        settings.beginGroup('header_subtask')
+        for field in settings.allKeys():
+            options: list = settings.value(field)
+            for _ in range(options.count('')):
+                options.remove('')
+            for option in options:
+                if option not in df_subtask.columns:
+                    msg = f'{field} in Subtask page not found.'
+                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
+                    return
+                header_subtask[field] = option
+
+        # 读取Subtask
+        converters = {
+            header_subtask['Description']: lambda y: str(y).strip(),
+            header_subtask['Item_No']: lambda y: str(y),
+            header_subtask['Mhr']: lambda y: f'{y:.2f}',
+        }
+        df_subtask = pd.read_excel(xlsx, sheet_name=sheet_name_subtask, keep_default_na=False, converters=converters)
+        # 修改指定列的列名
+        for field in settings.allKeys():
+            options: list = settings.value(field)
+            for _ in range(options.count('')):
+                options.remove('')
+            for option in options:
+                if option in df_subtask.columns:
+                    df_subtask.rename(columns={option: field}, inplace=True)
+        settings.endGroup()
+
+
+        # 增加subtask两列
+        df_subtask['Class'] = ['NRC' for _ in range(df_subtask.shape[0])]
+        df_subtask['Register'] = [register for _ in range(df_subtask.shape[0])]
+        print(df_subtask.columns.tolist())
 
         sql = f"""REPLACE INTO MhSubtaskTemp 
                   VALUES ({','.join(['?' for _ in range(len(subtask_header_mapping))])})"""
@@ -266,12 +374,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             for header in subtask_header_mapping.values():
                 self.query.addBindValue(df_subtask.loc[i, header])
             if not self.query.exec_():
-                fault = True
-                break
-        if fault:
-            self.db.con.rollback()
-            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
-            return
+                QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                self.db.con.rollback()
+                return
 
         # 若没有错误，则提交数据
         self.db.con.commit()

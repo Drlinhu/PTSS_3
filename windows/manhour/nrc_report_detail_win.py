@@ -69,7 +69,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             self.ui.dateEditPast.setDate(QtCore.QDate.currentDate())
 
         # 设置description
-        self.query.prepare("SELECT description FROM MhNrcReport WHERE nrc_id=:nrc_id")
+        self.query.prepare("SELECT description FROM MhNrcReportTemp WHERE nrc_id=:nrc_id")
         self.query.bindValue(":nrc_id", self.nrc_id)
         self.query.exec()
         if self.query.first():
