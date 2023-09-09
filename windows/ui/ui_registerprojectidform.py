@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_RegisterProjectIdForm(object):
     def setupUi(self, RegisterProjectIdForm):
         RegisterProjectIdForm.setObjectName("RegisterProjectIdForm")
-        RegisterProjectIdForm.resize(887, 491)
+        RegisterProjectIdForm.resize(768, 505)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)

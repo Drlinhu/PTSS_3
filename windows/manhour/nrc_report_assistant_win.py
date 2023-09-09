@@ -208,26 +208,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             if register == "":
                 QtWidgets.QMessageBox.critical(self, 'Error', 'Register must not be empty.')
 
-        # # 读取整个Excel文件
-        # xlsx = pd.ExcelFile(read_path)
-        # """ 验证文件 """
-        #
-        # sheet_header = {'NRC': TABLE_HEADER_MAPPING.values(),
-        #                 'Subtask': subtask_header_mapping.values()}
-        #
-        # for sheet_name, header in sheet_header.items():
-        #     if sheet_name not in xlsx.sheet_names:  # 验证页面是否存在
-        #         QtWidgets.QMessageBox.critical(self, 'Error', f'Sheet `{sheet_name}` not found in excel!')
-        #         return
-        #
-        #     df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name, nrows=0)
-        #     for x in header:  # 验证数据字段完整性
-        #         if x not in df_nrc.columns:
-        #             msg = f'Column `{x}` not found in {sheet_name} sheet!'
-        #             QtWidgets.QMessageBox.critical(self, 'Error', msg)
-        #             return
-        # 读取NRC
-
         sheet_name_nrc = None
         sheet_name_subtask = None
 
@@ -276,8 +256,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             for option in options:
                 if option not in df_nrc.columns:
                     msg = f'{field} in NRC page not found.'
-                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
-                    return
+                    QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+                    header_nrc[field] = ''
+                    continue
                 header_nrc[field] = option
 
         # 读取NRC数据
@@ -288,14 +269,12 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         }
         df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name_nrc, keep_default_na=False, converters=converters)
 
-        # 修改指定列的列名
-        for field in settings.allKeys():
-            options: list = settings.value(field)
-            for _ in range(options.count('')):
-                options.remove('')
-            for option in options:
-                if option in df_nrc.columns:
-                    df_nrc.rename(columns={option: field}, inplace=True)
+        # 修改列名，若列不存在则添加新列并设置默认值
+        for field, option in header_nrc.items():
+            if option:
+                df_nrc.rename(columns={option: field}, inplace=True)
+            else:
+                df_nrc[field] = ['' for _ in range(df_nrc.shape[0])]
         settings.endGroup()
 
         # 增加两列
@@ -309,16 +288,25 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             old_total = float(get_history_report_mh(df_nrc.loc[i, header_nrcId]))
             new_total = float(df_nrc.loc[i, header_total])
             df_nrc.loc[i, header_mh_changed] = f'{new_total - old_total:.2f}'
-
         # 保存NRC到数据库中
-        self.db.con.transaction() # 开启数据库事务
+        self.db.con.transaction()  # 开启数据库事务
         sql = f"""REPLACE INTO {self.table_temp}
-                  VALUES ({','.join(['?' for _ in range(self.tbReport_model.columnCount())])})"""
+                  VALUES (:nrc_id,
+                          :register,
+                          :ref_task,
+                          :description,
+                          :area,
+                          :trade,
+                          :ata,
+                          :status,
+                          :standard,
+                          :total,
+                          :mh_changed)"""
         self.query.prepare(sql)
         for i in range(df_nrc.shape[0]):
             for field, column in self.field_num.items():
                 header = TABLE_HEADER_MAPPING[field]
-                self.query.addBindValue(df_nrc.loc[i, header])
+                self.query.bindValue(f':{field}', df_nrc.loc[i, header])
             if not self.query.exec_():
                 QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
                 self.db.con.rollback()
@@ -340,8 +328,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             for option in options:
                 if option not in df_subtask.columns:
                     msg = f'{field} in Subtask page not found.'
-                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
-                    return
+                    QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+                    header_subtask[field] = ''
+                    continue
                 header_subtask[field] = option
 
         # 读取Subtask
@@ -351,6 +340,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             header_subtask['Mhr']: lambda y: f'{y:.2f}',
         }
         df_subtask = pd.read_excel(xlsx, sheet_name=sheet_name_subtask, keep_default_na=False, converters=converters)
+
         # 修改指定列的列名
         for field in settings.allKeys():
             options: list = settings.value(field)
@@ -361,11 +351,9 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                     df_subtask.rename(columns={option: field}, inplace=True)
         settings.endGroup()
 
-
         # 增加subtask两列
         df_subtask['Class'] = ['NRC' for _ in range(df_subtask.shape[0])]
         df_subtask['Register'] = [register for _ in range(df_subtask.shape[0])]
-        print(df_subtask.columns.tolist())
 
         sql = f"""REPLACE INTO MhSubtaskTemp 
                   VALUES ({','.join(['?' for _ in range(len(subtask_header_mapping))])})"""

@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_NrcStandardForm(object):
     def setupUi(self, NrcStandardForm):
         NrcStandardForm.setObjectName("NrcStandardForm")
-        NrcStandardForm.resize(1025, 451)
+        NrcStandardForm.resize(1131, 474)
         font = QtGui.QFont()
         font.setFamily("Arial")
         font.setPointSize(10)
@@ -687,8 +687,8 @@ class Ui_NrcStandardForm(object):
         spacerItem2 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_2.addItem(spacerItem2)
         self.horizontalLayout_5.addWidget(self.frame_7)
-        self.horizontalLayout_5.setStretch(0, 2)
-        self.horizontalLayout_5.setStretch(1, 3)
+        self.horizontalLayout_5.setStretch(0, 1)
+        self.horizontalLayout_5.setStretch(1, 1)
 
         self.retranslateUi(NrcStandardForm)
         self.cbbSearchAcType.setCurrentIndex(3)

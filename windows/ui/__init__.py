@@ -8,3 +8,6 @@ from .ui_texteditdialog import Ui_TextEditDialog
 from .ui_nrcreportdetailform import Ui_NrcReportDetailForm
 from .ui_mhfinalizeddetailform import Ui_MhFinalizedDetailForm
 from .ui_nrcstandardform import Ui_NrcStandardForm
+from .ui_registernrcdailydetailform import Ui_RegisterNrcDailyDetailForm
+from .ui_registerprojectidform import Ui_RegisterProjectIdForm
+from .ui_newregprojinputdialog import Ui_NewRegProjInputDialog

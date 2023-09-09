@@ -51,6 +51,12 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearch_clicked)
 
     def on_tbvNrcItem_clicked(self, index: QtCore.QModelIndex):
+        # 重置编辑控件为不可编辑
+        self.set_editorWidget_readOnly(True)
+        self.ui.cbbAcType.setEnabled(False)
+        self.ui.cbbWorkArea.setEnabled(False)
+
+        # 查询数据并设置到编辑控件中
         item_no = self.model.index(index.row(), self.field_num['item_no']).data()
         sql = """SELECT item.*,
                         mh_min.ai AS ai_min,
@@ -104,6 +110,8 @@ class NrcStandardItemWin(QtWidgets.QWidget):
 
     def on_tbvNrcItem_doubleClicked(self, index):
         self.set_editorWidget_readOnly(False)
+        self.ui.cbbAcType.setEnabled(True)
+        self.ui.cbbWorkArea.setEnabled(True)
 
     @pyqtSlot()
     def on_btnSearch_clicked(self):
@@ -122,7 +130,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
-
+        self.query.exec(F"SELECT * FROM {self.tb_item_name} LIMIT 1")
         header_1 = [self.tb_header_mapping[self.query.record().fieldName(i)]
                     for i in range(self.query.record().count())]
         header_2 = ['AE_MIN', 'AE_MAX', 'AI_MIN', 'AI_MAX', 'AV_MIN', 'AV_MAX', 'CL_MIN', 'CL_MAX',

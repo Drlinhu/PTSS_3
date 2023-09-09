@@ -6,8 +6,9 @@ from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
 from PyQt5.QtCore import pyqtSlot, QDate, Qt, QDateTime
 from PyQt5.QtGui import QStandardItem
 
-from ..ui.ui_registerprojectidform import Ui_RegisterProjectIdForm
-from ..ui.ui_newregprojinputdialog import Ui_NewRegProjInputDialog
+from ..ui import Ui_RegisterProjectIdForm
+from ..ui import Ui_NewRegProjInputDialog
+from .nrc_register_dashborad import RegisterNrcDailyWin
 from utils.database import DatabaseManager
 
 
@@ -33,7 +34,7 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         self.init_projectId_table()
         self.init_manhour_trend_table()
 
-    def on_tbvRegisterProjId_doubleClicked(self, index: QtCore.QModelIndex):
+    def on_tbvRegisterProjId_clicked(self, index: QtCore.QModelIndex):
         reg = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['register']).data()
         proj_id = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['proj_id']).data()
         self.ui.lineEditRegister.setText(reg)
@@ -49,8 +50,6 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         self.query.bindValue(':proj_id', proj_id)
         self.query.exec()
 
-        if self.query.record().count() == 0:
-            return
         model: QtGui.QStandardItemModel = self.ui.tbvMhDailyTotal.model()
         model.removeRows(0, model.rowCount())
 
@@ -58,7 +57,7 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
             temp = []
             for i in range(model.columnCount()):
                 item = self.query.value(i)
-                if isinstance(item,(float,int)):
+                if isinstance(item, (float, int)):
                     item = f"{item:.2f}"
                 temp.append(QStandardItem(item))
             model.appendRow(temp)
@@ -66,6 +65,13 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         # 设置当前最新记录的total
         cur_total = model.index(model.rowCount() - 1, 3).data()
         self.ui.lineEditTotal.setText(cur_total)
+
+    def on_tbvMhDailyTotal_doubleClicked(self, index: QtCore.QModelIndex):
+        register = self.ui.tbvMhDailyTotal.model().index(index.row(), 0).data()
+        proj_id = self.ui.tbvMhDailyTotal.model().index(index.row(), 1).data()
+        report_date = self.ui.tbvMhDailyTotal.model().index(index.row(), 2).data()
+        self.daily_win = RegisterNrcDailyWin(report_date, register, proj_id)
+        self.daily_win.show()
 
     @pyqtSlot()
     def on_btnSearch_clicked(self):
