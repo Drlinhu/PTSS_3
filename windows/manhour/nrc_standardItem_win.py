@@ -127,7 +127,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnImport_clicked(self):
-        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
+        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx *.xls)")
         if not read_path:
             return
         self.query.exec(F"SELECT * FROM {self.tb_item_name} LIMIT 1")
@@ -229,7 +229,7 @@ class NrcStandardItemWin(QtWidgets.QWidget):
     def on_btnExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_NRC_STANDARD_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
 

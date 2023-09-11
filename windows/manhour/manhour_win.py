@@ -1,10 +1,11 @@
-import os
+import os, re
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings
 
 from ..ui.ui_manhourform import Ui_ManHourForm
+from ..ui import Ui_GeneralInputDialog
 from ..image_viewer import ImageViewer
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
@@ -183,7 +184,7 @@ class ManhourWin(QtWidgets.QWidget):
         self.table_model.select()
 
     @pyqtSlot()
-    def on_pushButtonImport_clicked(self):
+    def on_pushButtonImport_clicked_backup(self):
         read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
         if not read_path:
             return
@@ -221,6 +222,93 @@ class ManhourWin(QtWidgets.QWidget):
 
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
+
+    @pyqtSlot()
+    def on_pushButtonImport_clicked(self):
+        try:
+            read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx *.xls)")
+            if not read_path:
+                return
+
+            settings = QSettings("mhr_import.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
+            sheet_names = {'summary': None,
+                           'rtn': None,
+                           'nrc': None, }
+            """识别EXCEL页面"""
+            xlsx = pd.ExcelFile(read_path)  # 读取整个页面
+            for page, name in sheet_names.items():
+                ini_path = f"finalized_sheet_name/{page}"
+                if not isinstance(settings.value(ini_path), list):
+                    msg = 'Value in mhr_import.ini must be end with `,`'
+                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
+                    return
+                values = [x.lower() for x in settings.value(ini_path)]
+                for _ in range(values.count('')):
+                    values.remove('')
+                for x in xlsx.sheet_names:
+                    if x.lower() in values:
+                        sheet_names[page] = x
+                        break
+            """ 读取各表列名参数并识别excel各个表列名"""
+            page_header = {'rtn': {},
+                           'nrc': {}, }
+            settings.beginGroup('finalized_header')
+            absence_header = {'rtn': [],
+                              'nrc': []}
+            for page, header in page_header.items():
+                if sheet_names[page] is None:
+                    continue
+                df = pd.read_excel(xlsx, sheet_name=sheet_names[page], nrows=0)
+                for field in settings.allKeys():
+                    options: list = settings.value(field)
+                    for _ in range(options.count('')):
+                        options.remove('')
+                    for option in options:
+                        if option in df.columns:
+                            header[field] = option
+                            break
+                    else:
+                        absence_header[page].append(field)
+                        header[field] = ''
+            ab_headers = []
+            for page, header in absence_header.items():
+                if header:
+                    ab_headers.append(f"Column {', '.join(header)} in {page} sheet")
+            msg = ' and '.join(ab_headers) + ' not found.'
+            if msg:
+                QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+
+            from pprint import pprint  # TODO DELETE
+
+            """读取RTN页面"""
+            if sheet_names['summary'] is not None:  # TODO
+                print("读取：" + 'summary')
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['summary'], nrows=1)
+                text = df.columns[0]
+                r = re.search(r'.+(?P<ac_type>A|B\d{3}).+(?P<register>B-[A-Z]{3}).*', text)
+                ac_type = r.group('ac_type')
+                register = r.group('register')
+            else:
+                print("手动输入相关信息")
+                dialog = GeneralRegisterInputDialog()
+                dialog.exec()
+                while dialog.is_ok and not dialog.register:
+                    msg = "Register should not be empty"
+                    QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+                    dialog.exec()
+                ac_type = dialog.ac_type
+                register = dialog.register
+            print(ac_type, register)
+
+            if sheet_names['rtn'] is not None:  # TODO
+                print("读取：" + 'rtn')
+                # 需要识别pkg_id
+
+            if sheet_names['nrc'] is not None:  # TODO
+                print("读取：" + 'nrc')
+
+        except Exception as e:
+            print(e)
 
     @pyqtSlot()
     def on_pushButtonExport_clicked(self):
@@ -383,3 +471,25 @@ class ManhourWin(QtWidgets.QWidget):
             self.ui.tableView.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             self.ui.tableView.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+
+class GeneralRegisterInputDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent=None)
+        self.ui = Ui_GeneralInputDialog()
+        self.ui.setupUi(self)
+        self.ui.label_02.hide()
+        self.ui.lineEdit_02.hide()
+        self.ui.label_01.setText("Register:")
+        self.is_ok = False
+
+    @property
+    def ac_type(self):
+        return self.ui.cbbAcType.currentText()
+
+    @property
+    def register(self):
+        return self.ui.lineEdit_01.text()
+
+    def on_buttonBox_accepted(self) -> None:
+        self.is_ok = True

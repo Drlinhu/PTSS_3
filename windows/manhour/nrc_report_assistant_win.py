@@ -25,7 +25,8 @@ TABLE_HEADER_MAPPING = {'nrc_id': 'NRC_ID',
                         'status': 'Status',
                         'standard': 'Standard',
                         'total': 'Total',
-                        'mh_changed': 'MH_Changed'
+                        'mh_changed': 'MH_Changed',
+                        'remark': 'Remark',
                         }
 
 CELL_BG = {}
@@ -70,7 +71,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         # 设置表格视图属性
         for field, column in self.field_num.items():  # 设置表格列宽度默认行为
-            if field not in ['description']:
+            if field not in ['description', 'remark']:
                 self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
             else:
                 self.tbReport_hHeader.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
@@ -196,7 +197,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.query.exec("DELETE FROM MhNrcReportTemp")
         self.query.exec("DELETE FROM MhSubtaskTemp")
 
-        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
+        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx *.xls)")
         if not read_path:
             return
 
@@ -211,12 +212,12 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         sheet_name_nrc = None
         sheet_name_subtask = None
 
-        settings = QSettings("nrc_daily_report.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
+        settings = QSettings("mhr_import.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
         """ 识别文件 """
         xlsx = pd.ExcelFile(read_path)  # 读取整个页面
         # 识别NRC页面名称
         if not isinstance(settings.value("sheet_name/nrc"), list):
-            msg = 'Value in nrc_daily_report.ini must be end with `,`'
+            msg = 'Value in mhr_import.ini must be end with `,`'
             QtWidgets.QMessageBox.critical(self, 'Error', msg)
             return
         values = [x.lower() for x in settings.value("sheet_name/nrc")]
@@ -229,7 +230,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
 
         # 识别SUBTASK页面名称
         if not isinstance(settings.value("sheet_name/subtask"), list):
-            msg = 'Value in nrc_daily_report.ini must be end with `,`'
+            msg = 'Value in mhr_import.ini must be end with `,`'
             QtWidgets.QMessageBox.critical(self, 'Error', msg)
             return
         values = [x.lower() for x in settings.value("sheet_name/subtask")]
@@ -254,18 +255,20 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             for _ in range(options.count('')):
                 options.remove('')
             for option in options:
-                if option not in df_nrc.columns:
-                    msg = f'{field} in NRC page not found.'
-                    QtWidgets.QMessageBox.warning(self, 'Warning', msg)
-                    header_nrc[field] = ''
-                    continue
-                header_nrc[field] = option
+                if option in df_nrc.columns:
+                    header_nrc[field] = option
+                    break
+            else:
+                msg = f'{field} in NRC page not found.'
+                QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+                header_nrc[field] = ''
 
         # 读取NRC数据
         converters = {
             header_nrc['Description']: lambda y: str(y).strip(),
             header_nrc['ATA']: lambda y: str(y),
             header_nrc['Total']: lambda y: f'{y:.2f}',
+            header_nrc['Remark']: lambda y: str(y).strip(),
         }
         df_nrc = pd.read_excel(xlsx, sheet_name=sheet_name_nrc, keep_default_na=False, converters=converters)
 
@@ -301,7 +304,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
                           :status,
                           :standard,
                           :total,
-                          :mh_changed)"""
+                          :mh_changed,
+                          :remark)"""
         self.query.prepare(sql)
         for i in range(df_nrc.shape[0]):
             for field, column in self.field_num.items():
@@ -376,7 +380,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
     def on_btnReportExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_NRC_Report_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
 
@@ -543,21 +547,18 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         report_date = dialog.date()
         mode = dialog.model()
 
-        fault = False
         self.db.con.transaction()
 
         # 将reportTemp表的内容存入到正式表中
         sql = f"""{mode} INTO {self.table_main} 
-                                (nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,report_date) 
-                    SELECT nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,:dt 
-                    FROM {self.table_temp};
-                 """
+                        (nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,remark,report_date) 
+                   SELECT nrc_id,register,ref_task,description,area,trade,ata,status,standard,total,remark,:dt 
+                   FROM {self.table_temp};
+               """
         self.query.prepare(sql)
         self.query.bindValue(':dt', report_date)
         if not self.query.exec():
-            fault = True
             QtWidgets.QMessageBox.critical(self, 'Error', 'Save NRC failed:\n' + self.query.lastError().text())
-        if fault:
             self.db.con.rollback()
             return
 
@@ -566,9 +567,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         self.query.prepare(sql)
         self.query.bindValue(':dt', report_date)
         if not self.query.exec():
-            fault = True
             QtWidgets.QMessageBox.critical(self, 'Error', 'Save Subtask failed:\n' + self.query.lastError().text())
-        if fault:
             self.db.con.rollback()
             return
 
@@ -583,7 +582,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
     def on_btnHistoryExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_Similarity_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
 

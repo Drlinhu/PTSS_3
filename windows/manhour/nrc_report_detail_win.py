@@ -49,7 +49,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.query = QtSql.QSqlQuery(self.db.con)
         self.tb_subtask_main = "MhSubtask"
         self.tb_subtask_temp = "MhSubtaskTemp"
-        self.tb_cxRemark = "MhCxRemark"
+        self.tb_mhCxRemark = "MhCxRemark"
 
         self.ui = Ui_NrcReportDetailForm()
         self.ui.setupUi(self)
@@ -73,7 +73,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.query.bindValue(":nrc_id", self.nrc_id)
         self.query.exec()
         if self.query.first():
-            self.ui.lineEditDesc.setText(self.query.value(0))
+            self.ui.plainTextEditDesc.setPlainText(self.query.value(0))
 
         self.init_table_subtask_past()
         self.init_table_subtask_latest()
@@ -85,7 +85,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
     def on_btnExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_CX_REMARK_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
 
@@ -166,7 +166,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         choose = QtWidgets.QMessageBox.warning(self, 'Warning', 'Are you sure to delete?',
                                                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         if choose == QtWidgets.QMessageBox.Yes:
-            self.query.prepare(f"""DELETE FROM {self.tb_cxRemark} WHERE id=:id""")
+            self.query.prepare(f"""DELETE FROM {self.tb_mhCxRemark} WHERE id=:id""")
             self.db.con.transaction()
             for index in selected_indexes:
                 self.query.bindValue(':id', index.data())
@@ -268,7 +268,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
 
         # 创建表格模型(不可编辑, 默认可排序)
         self.tb_remark_model = QtSql.QSqlTableModel(self, self.db.con)
-        self.tb_remark_model.setTable(self.tb_cxRemark)
+        self.tb_remark_model.setTable(self.tb_mhCxRemark)
 
         # 创建选择模型
         self.selection_model_remark = QtCore.QItemSelectionModel(self.tb_remark_model)

@@ -41,7 +41,7 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
     def on_btnReportExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd_hh_mm_ss')
         filename = f'MH_NRC_Subtask_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
 

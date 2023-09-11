@@ -94,6 +94,7 @@ class Ui_NrcStandardForm(object):
         font.setPointSize(10)
         self.tbvNrcItem.setFont(font)
         self.tbvNrcItem.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbvNrcItem.setAlternatingRowColors(True)
         self.tbvNrcItem.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tbvNrcItem.setSortingEnabled(True)
         self.tbvNrcItem.setObjectName("tbvNrcItem")
