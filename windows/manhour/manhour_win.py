@@ -14,6 +14,7 @@ from .nrc_manhour_trend import NrcManhourTrendWin
 from .nrc_standardItem_win import NrcStandardItemWin
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
+from utils.setting import get_section_options, get_section_allKeys
 
 TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
                         'class': 'Class',
@@ -37,6 +38,8 @@ TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
                         'dtotal': 'D_Total',
                         'remark': 'Remark',
                         }
+
+ini_file = "mhr_import.ini"
 
 
 class ManhourWin(QtWidgets.QWidget):
@@ -184,85 +187,47 @@ class ManhourWin(QtWidgets.QWidget):
         self.table_model.select()
 
     @pyqtSlot()
-    def on_pushButtonImport_clicked_backup(self):
-        read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx)")
-        if not read_path:
-            return
-
-        df = pd.read_excel(read_path, nrows=0)
-        # 验证数据字段完整性
-        for x in TABLE_HEADER_MAPPING.values():
-            if x not in df.columns:
-                QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
-                return
-        # 读取并保存数据
-        converters = {'WO': lambda y: str(y),
-                      'Description': lambda y: str(y).strip(),
-                      'ATA': lambda y: str(y),
-                      'Zone': lambda y: str(y),
-                      'Skill': lambda y: f'{y:.2f}',
-                      'Unskill': lambda y: f'{y:.2f}',
-                      'Total': lambda y: f'{y:.2f}',
-                      'D_Skill': lambda y: f'{y:.2f}',
-                      'D_Unskill': lambda y: f'{y:.2f}',
-                      'D_Total': lambda y: f'{y:.2f}', }
-        df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
-        query = QtSql.QSqlQuery(self.db.con)
-        query.prepare(f"""REPLACE INTO {self.table_name}
-                          VALUES ({','.join(['?' for _ in range(self.table_model.columnCount())])})""")
-        self.db.con.transaction()
-        for i in range(df.shape[0]):
-            for field, column in self.field_num.items():
-                header = TABLE_HEADER_MAPPING[field]
-                query.addBindValue(df.loc[i, header])
-            if not query.exec_():
-                self.db.con.rollback()
-                QtWidgets.QMessageBox.critical(self, 'Error', f'Failed\n{self.query.lastError().text()}')
-                return
-
-        self.db.con.commit()
-        QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
-
-    @pyqtSlot()
     def on_pushButtonImport_clicked(self):
         try:
             read_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, filter="Excel Files (*.xlsx *.xls)")
             if not read_path:
                 return
 
-            settings = QSettings("mhr_import.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
+            # 启动数据库事务，执行保存
+            self.db.con.transaction()
+
+            """识别EXCEL页面"""
             sheet_names = {'summary': None,
                            'rtn': None,
                            'nrc': None, }
-            """识别EXCEL页面"""
             xlsx = pd.ExcelFile(read_path)  # 读取整个页面
             for page, name in sheet_names.items():
-                ini_path = f"finalized_sheet_name/{page}"
-                if not isinstance(settings.value(ini_path), list):
-                    msg = 'Value in mhr_import.ini must be end with `,`'
-                    QtWidgets.QMessageBox.critical(self, 'Error', msg)
+                ok, options = get_section_options(ini_file, 'finalized_sheet_name', page)
+                if not ok:
+                    QtWidgets.QMessageBox.critical(self, 'Error', options)
                     return
-                values = [x.lower() for x in settings.value(ini_path)]
-                for _ in range(values.count('')):
-                    values.remove('')
-                for x in xlsx.sheet_names:
-                    if x.lower() in values:
-                        sheet_names[page] = x
+
+                for option in options:
+                    if option in xlsx.sheet_names:
+                        sheet_names[page] = option
                         break
+
             """ 读取各表列名参数并识别excel各个表列名"""
             page_header = {'rtn': {},
                            'nrc': {}, }
-            settings.beginGroup('finalized_header')
             absence_header = {'rtn': [],
                               'nrc': []}
             for page, header in page_header.items():
                 if sheet_names[page] is None:
                     continue
                 df = pd.read_excel(xlsx, sheet_name=sheet_names[page], nrows=0)
-                for field in settings.allKeys():
-                    options: list = settings.value(field)
-                    for _ in range(options.count('')):
-                        options.remove('')
+                for field in get_section_allKeys(ini_file, 'finalized_header'):
+                    # 读取配置
+                    ok, options = get_section_options(ini_file, 'finalized_header', field)
+                    if not ok:
+                        QtWidgets.QMessageBox.critical(self, 'Error', options)
+                        return
+                    # 检查
                     for option in options:
                         if option in df.columns:
                             header[field] = option
@@ -270,26 +235,35 @@ class ManhourWin(QtWidgets.QWidget):
                     else:
                         absence_header[page].append(field)
                         header[field] = ''
-            ab_headers = []
+
+            # 提示确实的列名
+            ab_headers_info = []
             for page, header in absence_header.items():
                 if header:
-                    ab_headers.append(f"Column {', '.join(header)} in {page} sheet")
-            msg = ' and '.join(ab_headers) + ' not found.'
+                    ab_headers_info.append(f"Column {', '.join(header)} in {page} sheet")
+            msg = ' and '.join(ab_headers_info) + ' not found.'
             if msg:
                 QtWidgets.QMessageBox.warning(self, 'Warning', msg)
 
-            from pprint import pprint  # TODO DELETE
+            """读取Summary页面"""
+            ac_type = ''
+            register = ''
+            proj_id = ''
+            if sheet_names['summary'] is not None:
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['summary'], keep_default_na=False, nrows=1)
 
-            """读取RTN页面"""
-            if sheet_names['summary'] is not None:  # TODO
-                print("读取：" + 'summary')
-                df = pd.read_excel(xlsx, sheet_name=sheet_names['summary'], nrows=1)
+                # 识别AC TYPE 和Register
                 text = df.columns[0]
-                r = re.search(r'.+(?P<ac_type>A|B\d{3}).+(?P<register>B-[A-Z]{3}).*', text)
+                r = re.search(r'.+(?P<ac_type>A|B\d{3}).+(?P<register>B-[A-Z]{3}).*', text, re.IGNORECASE)
                 ac_type = r.group('ac_type')
                 register = r.group('register')
-            else:
-                print("手动输入相关信息")
+
+                # 识别PROJECT ID
+                text = ''.join(df.iloc[0, :])
+                r = re.search(r'project ID:.*(?P<proj_id>[A-Z]{2})', text, re.IGNORECASE)
+                proj_id = r.group('proj_id')
+
+            if not ac_type or not register or not proj_id:
                 dialog = GeneralRegisterInputDialog()
                 dialog.exec()
                 while dialog.is_ok and not dialog.register:
@@ -297,18 +271,134 @@ class ManhourWin(QtWidgets.QWidget):
                     QtWidgets.QMessageBox.warning(self, 'Warning', msg)
                     dialog.exec()
                 ac_type = dialog.ac_type
-                register = dialog.register
-            print(ac_type, register)
+                register = dialog.register.strip()
+                proj_id = dialog.project_id.strip()
 
-            if sheet_names['rtn'] is not None:  # TODO
-                print("读取：" + 'rtn')
-                # 需要识别pkg_id
+            """读取RTN页面"""
+            if sheet_names['rtn'] is not None:
+                # 读取识别description语句标记
+                ok, options = get_section_options(ini_file, 'default', 'desc_identification')
+                if not ok:
+                    QtWidgets.QMessageBox.critical(self, 'Error', options)
+                    return
+                desc_marks = options
 
-            if sheet_names['nrc'] is not None:  # TODO
-                print("读取：" + 'nrc')
+                # 读取RTN表格
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['rtn'], keep_default_na=False)
 
+                # 修改列名为格式列，方便导入数据库
+                df.rename(columns={v: k for k, v in page_header['rtn'].items() if v}, inplace=True)
+
+                # 添加缺失的列
+                for ab_header in absence_header['rtn']:
+                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill']:
+                        default_value = 0.0
+                    else:
+                        default_value = ""
+                    df[ab_header] = [default_value for _ in range(df.shape[0])]
+
+                # 添加Class, Register和Standard列
+                df['Class'] = ['RTN' for _ in range(df.shape[0])]
+                df['Register'] = [register for _ in range(df.shape[0])]
+                df['Ac_Type'] = [ac_type for _ in range(df.shape[0])]
+                df['Standard'] = ['N' for _ in range(df.shape[0])]
+
+                # 按数据库表列顺序修改dataframe列顺序
+                df = df[TABLE_HEADER_MAPPING.values()]
+                # 获取缺少MH ID的行待后续特殊处理
+                df_no_mhId = df[~df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(
+                    drop=True)
+                # 过滤掉缺少MH_Id的行
+                df = df[df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(drop=True)
+                j = 0
+                for i in range(df_no_mhId.shape[0]):
+                    if j > 18:
+                        QtWidgets.QMessageBox.critical(self, 'Error', 'Qty. of no MH_Id items is over limitation.')
+                        return
+                    for x in desc_marks:
+                        if x.lower() in df_no_mhId.loc[i, 'Description'].lower():
+                            df_no_mhId.loc[i, 'MH_Id'] = f'{proj_id}{j:0>5}'
+                            j += 1
+                df = pd.concat([df, df_no_mhId], ignore_index=True)
+                df = df[df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(drop=True)
+                # 存入数据
+                sql = f"""REPLACE INTO {self.table_name}
+                          VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})"""
+                self.query.prepare(sql)
+                for i in range(df.shape[0]):
+                    for k, v in TABLE_HEADER_MAPPING.items():
+                        self.query.bindValue(f":{k}", str(df.loc[i, v]))
+                    if not self.query.exec():
+                        QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                        self.db.con.rollback()
+                        return
+
+            """读取NRC页面"""
+            if sheet_names['nrc'] is not None:
+                # 读取识别standard语句标记
+                ok, options = get_section_options(ini_file, 'standard', 'marks')
+                if not ok:
+                    QtWidgets.QMessageBox.critical(self, 'Error', options)
+                    return
+                standard_mark = options
+
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['nrc'])
+                exclude_cols = [page_header['nrc']['MH_Id'], ]  # 指定要排除的列
+                df = df.dropna(subset=exclude_cols)
+                df.fillna('', inplace=True)
+
+                # 修改列名为格式列，方便导入数据库
+                df.rename(columns={v: k for k, v in page_header['nrc'].items() if v}, inplace=True)
+
+                # 添加缺失的列
+                for ab_header in absence_header['nrc']:
+                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill']:
+                        default_value = 0.0
+                    else:
+                        default_value = ""
+                    df[ab_header] = [default_value for _ in range(df.shape[0])]
+
+                # 添加Class, Register和Standard列
+                df['Class'] = ['NRC' for _ in range(df.shape[0])]
+                df['Register'] = [register for _ in range(df.shape[0])]
+                df['Ac_Type'] = [ac_type for _ in range(df.shape[0])]
+
+                standard_value = []
+                for i in range(df.shape[0]):
+                    for mark in standard_mark:
+                        if mark.lower() in str(df.loc[i, 'Remark']).lower():
+                            standard_value.append('Y')
+                        else:
+                            standard_value.append('N')
+                df['Standard'] = standard_value
+
+                # 按数据库表列顺序修改dataframe列顺序
+                df = df[TABLE_HEADER_MAPPING.values()]
+
+                # 存入数据
+                sql = f"""INSERT INTO {self.table_name}
+                          VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})
+                          ON CONFLICT (mh_id) DO UPDATE SET
+                          {','.join([f"{k}=CASE WHEN {k}>:{k} THEN {k} ELSE :{k} END"
+                                     for k in TABLE_HEADER_MAPPING.keys()])}"""
+                self.query.prepare(sql)
+                for i in range(df.shape[0]):
+                    for k, v in TABLE_HEADER_MAPPING.items():
+                        self.query.bindValue(f":{k}", str(df.loc[i, v]))
+                    if not self.query.exec():
+                        QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                        self.db.con.rollback()
+                        return
+
+            # 以上存入过程正常，则提交数据库
+            if self.db.con.commit():
+                QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
+            else:
+                QtWidgets.QMessageBox.critical(self, 'Error', self.db.con.lastError().text())
+                self.db.con.rollback()
         except Exception as e:
-            print(e)
+            QtWidgets.QMessageBox.critical(self, 'Error', e)
+            self.db.con.rollback()
 
     @pyqtSlot()
     def on_pushButtonExport_clicked(self):
@@ -478,9 +568,8 @@ class GeneralRegisterInputDialog(QtWidgets.QDialog):
         super().__init__(parent=None)
         self.ui = Ui_GeneralInputDialog()
         self.ui.setupUi(self)
-        self.ui.label_02.hide()
-        self.ui.lineEdit_02.hide()
         self.ui.label_01.setText("Register:")
+        self.ui.label_02.setText("Project ID:")
         self.is_ok = False
 
     @property
@@ -490,6 +579,10 @@ class GeneralRegisterInputDialog(QtWidgets.QDialog):
     @property
     def register(self):
         return self.ui.lineEdit_01.text()
+
+    @property
+    def project_id(self):
+        return self.ui.lineEdit_02.text()
 
     def on_buttonBox_accepted(self) -> None:
         self.is_ok = True

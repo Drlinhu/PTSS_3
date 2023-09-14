@@ -2,7 +2,7 @@ from PyQt5.QtCore import QSettings
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 
 DATABASE = None
-TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
+TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     mh_id       TEXT DEFAULT ""
                      PRIMARY KEY
                      NOT NULL,
@@ -28,7 +28,7 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
     remark      TEXT DEFAULT ""
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhCxRemark (
+             "MhCxRemark": """CREATE TABLE IF NOT EXISTS MhCxRemark (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     mh_id           TEXT,
     remark          TEXT    DEFAULT "",
@@ -40,182 +40,186 @@ TABLE_SQL = ["""CREATE TABLE IF NOT EXISTS MhFinalized (
                             NOT NULL
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhImage (
-    id    INTEGER PRIMARY KEY,
-    mh_id TEXT    NOT NULL,
-    name  TEXT,
-    image BLOB,
-    sheet INTEGER DEFAULT (1) 
+             "MhImage": """CREATE TABLE IF NOT EXISTS MhImage (
+   id    INTEGER PRIMARY KEY,
+   mh_id TEXT    NOT NULL,
+   name  TEXT,
+   image BLOB,
+   sheet INTEGER DEFAULT (1) 
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhNrcReport (
-    nrc_id      TEXT DEFAULT "",
-    register    TEXT DEFAULT "",
-    ref_task    TEXT DEFAULT "",
-    description TEXT DEFAULT "",
-    area        TEXT DEFAULT "",
-    trade       TEXT DEFAULT "",
-    ata         TEXT DEFAULT "",
-    status      TEXT DEFAULT "",
-    standard    TEXT DEFAULT "",
-    total       REAL DEFAULT (0.0),
-    report_date TEXT,
-    PRIMARY KEY (
-        nrc_id,
-        report_date
-    )
+             "MhNrcReport": """CREATE TABLE IF NOT EXISTS MhNrcReport (
+   nrc_id      TEXT DEFAULT "",
+   register    TEXT DEFAULT "",
+   ref_task    TEXT DEFAULT "",
+   description TEXT DEFAULT "",
+   area        TEXT DEFAULT "",
+   trade       TEXT DEFAULT "",
+   ata         TEXT DEFAULT "",
+   status      TEXT DEFAULT "",
+   standard    TEXT DEFAULT "",
+   total       REAL DEFAULT (0.0),
+   remark      TEXT DEFAULT "",
+   report_date TEXT,
+   PRIMARY KEY (
+       nrc_id,
+       report_date
+   )
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
-    nrc_id      TEXT PRIMARY KEY,
-    register    TEXT DEFAULT "",
-    ref_task    TEXT DEFAULT "",
-    description TEXT DEFAULT "",
-    area        TEXT DEFAULT "",
-    trade       TEXT DEFAULT "",
-    ata         TEXT,
-    status      TEXT DEFAULT "",
-    standard    TEXT,
-    total       REAL DEFAULT (0.0),
-    mh_changed  REAL DEFAULT (0.0)
+             "MhNrcReportTemp": """CREATE TABLE IF NOT EXISTS MhNrcReportTemp (
+   nrc_id      TEXT PRIMARY KEY,
+   register    TEXT DEFAULT "",
+   ref_task    TEXT DEFAULT "",
+   description TEXT DEFAULT "",
+   area        TEXT DEFAULT "",
+   trade       TEXT DEFAULT "",
+   ata         TEXT,
+   status      TEXT DEFAULT "",
+   standard    TEXT,
+   total       REAL DEFAULT (0.0),
+   mh_changed  REAL DEFAULT (0.0),
+   remark      TEXT DEFAULT ""
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhSubtask (
-    register    TEXT    DEFAULT "",
-    proj_id     TEXT    DEFAULT "",
-    class       TEXT    DEFAULT "",
-    sheet       TEXT    DEFAULT "",
-    item_no     INTEGER DEFAULT (0),
-    description TEXT    DEFAULT "",
-    jsn         TEXT    DEFAULT "",
-    mhr         REAL    DEFAULT (0.0),
-    trade       TEXT    DEFAULT "",
-    report_date TEXT,
-    PRIMARY KEY (
-        proj_id,
-        item_no,
-        jsn,
-        report_date
-    )
+             "MhSubtask": """CREATE TABLE IF NOT EXISTS MhSubtask (
+   register    TEXT    DEFAULT "",
+   proj_id     TEXT    DEFAULT "",
+   class       TEXT    DEFAULT "",
+   sheet       TEXT    DEFAULT "",
+   item_no     INTEGER DEFAULT (0),
+   description TEXT    DEFAULT "",
+   jsn         TEXT    DEFAULT "",
+   mhr         REAL    DEFAULT (0.0),
+   trade       TEXT    DEFAULT "",
+   report_date TEXT,
+   PRIMARY KEY (
+       proj_id,
+       item_no,
+       jsn,
+       report_date
+   )
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhSubtaskTemp (
-    register    TEXT    DEFAULT "",
-    proj_id     TEXT    DEFAULT "",
-    class       TEXT    DEFAULT "",
-    sheet       TEXT    DEFAULT "",
-    item_no     INTEGER DEFAULT (0),
-    description TEXT    DEFAULT "",
-    jsn         TEXT    DEFAULT "",
-    mhr         REAL    DEFAULT (0.0),
-    trade       TEXT    DEFAULT "",
-    PRIMARY KEY (
-        proj_id,
-        item_no,
-        jsn
-    )
+             "MhSubtaskTemp": """CREATE TABLE IF NOT EXISTS MhSubtaskTemp (
+   register    TEXT    DEFAULT "",
+   proj_id     TEXT    DEFAULT "",
+   class       TEXT    DEFAULT "",
+   sheet       TEXT    DEFAULT "",
+   item_no     INTEGER DEFAULT (0),
+   description TEXT    DEFAULT "",
+   jsn         TEXT    DEFAULT "",
+   mhr         REAL    DEFAULT (0.0),
+   trade       TEXT    DEFAULT "",
+   PRIMARY KEY (
+       proj_id,
+       item_no,
+       jsn
+   )
 );
 """,
-             """CREATE TABLE IF NOT EXISTS RegisterProjectId (
-    register   TEXT DEFAULT "",
-    proj_id    TEXT DEFAULT "",
-    start_date TEXT DEFAULT "",
-    end_date   TEXT DEFAULT "",
-    status     TEXT DEFAULT "",
-    PRIMARY KEY (
-        register,
-        proj_id
-    )
+             "RegisterProjectId": """CREATE TABLE IF NOT EXISTS RegisterProjectId (
+   register   TEXT DEFAULT "",
+   proj_id    TEXT DEFAULT "",
+   start_date TEXT DEFAULT "",
+   end_date   TEXT DEFAULT "",
+   status     TEXT DEFAULT "",
+   PRIMARY KEY (
+       register,
+       proj_id
+   )
 );
 """,
-             """CREATE TABLE IF NOT EXISTS MhNrcStandardItem (
-    item_no     TEXT PRIMARY KEY
-                     NOT NULL,
-    ac_type     TEXT DEFAULT "",
-    description TEXT DEFAULT "",
-    work_area   TEXT DEFAULT ""
+             "MhNrcStandardItem": """CREATE TABLE IF NOT EXISTS MhNrcStandardItem (
+   item_no     TEXT PRIMARY KEY
+                    NOT NULL,
+   ac_type     TEXT DEFAULT "",
+   description TEXT DEFAULT "",
+   work_area   TEXT DEFAULT ""
 );""",
-             """CREATE TABLE IF NOT EXISTS MhNrcStandardImage (
-    id      INTEGER PRIMARY KEY,
-    item_no TEXT    REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
-                                                           ON UPDATE CASCADE,
-    name    TEXT    DEFAULT "",
-    image   BLOB,
-    sheet   INTEGER DEFAULT (1) 
+             "MhNrcStandardImage": """CREATE TABLE IF NOT EXISTS MhNrcStandardImage (
+   id      INTEGER PRIMARY KEY,
+   item_no TEXT    REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                          ON UPDATE CASCADE,
+   name    TEXT    DEFAULT "",
+   image   BLOB,
+   sheet   INTEGER DEFAULT (1) 
 );""",
-             """CREATE TABLE IF NOT EXISTS MhNrcStandardMax (
-    item_no TEXT PRIMARY KEY
-                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
-                                                        ON UPDATE CASCADE,
-    ai      REAL DEFAULT (0.0),
-    ae      REAL DEFAULT (0.0),
-    av      REAL DEFAULT (0.0),
-    ss      REAL DEFAULT (0.0),
-    pt      REAL DEFAULT (0.0),
-    sm      REAL DEFAULT (0.0),
-    gw      REAL DEFAULT (0.0),
-    cl      REAL DEFAULT (0.0) 
+             "MhNrcStandardMax": """CREATE TABLE IF NOT EXISTS MhNrcStandardMax (
+   item_no TEXT PRIMARY KEY
+                REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                       ON UPDATE CASCADE,
+   ai      REAL DEFAULT (0.0),
+   ae      REAL DEFAULT (0.0),
+   av      REAL DEFAULT (0.0),
+   ss      REAL DEFAULT (0.0),
+   pt      REAL DEFAULT (0.0),
+   sm      REAL DEFAULT (0.0),
+   gw      REAL DEFAULT (0.0),
+   cl      REAL DEFAULT (0.0) 
 );""",
-             """CREATE TABLE IF NOT EXISTS MhNrcStandardMin (
-    item_no TEXT PRIMARY KEY
-                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
-                                                        ON UPDATE CASCADE,
-    ai      REAL DEFAULT (0.0),
-    ae      REAL DEFAULT (0.0),
-    av      REAL DEFAULT (0.0),
-    ss      REAL DEFAULT (0.0),
-    pt      REAL DEFAULT (0.0),
-    sm      REAL DEFAULT (0.0),
-    gw      REAL DEFAULT (0.0),
-    cl      REAL DEFAULT (0.0) 
+             "MhNrcStandardMin": """CREATE TABLE IF NOT EXISTS MhNrcStandardMin (
+   item_no TEXT PRIMARY KEY
+                REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                       ON UPDATE CASCADE,
+   ai      REAL DEFAULT (0.0),
+   ae      REAL DEFAULT (0.0),
+   av      REAL DEFAULT (0.0),
+   ss      REAL DEFAULT (0.0),
+   pt      REAL DEFAULT (0.0),
+   sm      REAL DEFAULT (0.0),
+   gw      REAL DEFAULT (0.0),
+   cl      REAL DEFAULT (0.0) 
 );""",
-             """CREATE TABLE IF NOT EXISTS MhNrcStandardRemark (
-    item_no TEXT PRIMARY KEY
-                 REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
-                                                        ON UPDATE CASCADE,
-    remark  TEXT DEFAULT ""
+             "MhNrcStandardRemark": """CREATE TABLE IF NOT EXISTS MhNrcStandardRemark (
+   item_no TEXT PRIMARY KEY
+                REFERENCES MhNrcStandardItem (item_no) ON DELETE CASCADE
+                                                       ON UPDATE CASCADE,
+   remark  TEXT DEFAULT ""
 );""",
-             """CREATE TABLE IF NOT EXISTS Procedure (
-    proc_id     TEXT PRIMARY KEY,
-    description TEXT DEFAULT ""
+             "Procedure": """CREATE TABLE IF NOT EXISTS Procedure (
+   proc_id     TEXT PRIMARY KEY,
+   description TEXT DEFAULT ""
 );
 """,
-             """CREATE TABLE IF NOT EXISTS ProcedureImage (
-    id      INTEGER PRIMARY KEY,
-    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                   ON UPDATE CASCADE,
-    name    TEXT,
-    image   BLOB,
-    sheet   INTEGER DEFAULT (1) 
+             "ProcedureImage": """CREATE TABLE IF NOT EXISTS ProcedureImage (
+   id      INTEGER PRIMARY KEY,
+   proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                  ON UPDATE CASCADE,
+   name    TEXT,
+   image   BLOB,
+   sheet   INTEGER DEFAULT (1) 
 );""",
-             """CREATE TABLE IF NOT EXISTS ProcedureIcw (
-    id      INTEGER PRIMARY KEY,
-    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                   ON UPDATE CASCADE,
-    icw     TEXT,
-    mhr     REAL    DEFAULT (0.0),
-    remark  TEXT    DEFAULT ""
+             "ProcedureIcw": """CREATE TABLE IF NOT EXISTS ProcedureIcw (
+   id      INTEGER PRIMARY KEY,
+   proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                  ON UPDATE CASCADE,
+   icw     TEXT,
+   mhr     REAL    DEFAULT (0.0),
+   remark  TEXT    DEFAULT ""
 );
 """,
-             """CREATE TABLE IF NOT EXISTS ProcedurePanel (
-    id      INTEGER PRIMARY KEY,
-    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                   ON UPDATE CASCADE,
-    panel   TEXT
+             "ProcedurePanel": """CREATE TABLE IF NOT EXISTS ProcedurePanel (
+   id      INTEGER PRIMARY KEY,
+   proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                  ON UPDATE CASCADE,
+   panel   TEXT
 );
 """,
-             """CREATE TABLE IF NOT EXISTS ProcedureRef (
-    id      INTEGER PRIMARY KEY,
-    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                   ON UPDATE CASCADE,
-    ref     TEXT
+             "ProcedureRef": """CREATE TABLE IF NOT EXISTS ProcedureRef (
+   id      INTEGER PRIMARY KEY,
+   proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                  ON UPDATE CASCADE,
+   ref     TEXT
 );""",
-             ]
+             }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
     description
 );""",
                ]
+
+TABLE_FIELDS = {'MhNrcReport': []}
 
 __all__ = ['initialize_database', 'DatabaseManager']
 
@@ -238,12 +242,72 @@ def initialize_database():
     db_manager = DatabaseManager()
 
     # 创建表格
-    for sql in TABLE_SQL:
+    for sql in TABLE_SQL.values():
         db_manager.query(sql)
 
     # 创建表格索引
     for sql in TABLE_INDEX:
         db_manager.query(sql)
+
+    # 检查已有表格
+    CHECKED_TABLE_FIELDS = {'MhNrcReport': ['nrc_id',
+                                            'register',
+                                            'ref_task',
+                                            'description',
+                                            'area',
+                                            'trade',
+                                            'ata',
+                                            'status',
+                                            'standard',
+                                            'total',
+                                            'remark',
+                                            'report_date',
+                                            ],
+                            'MhNrcReportTemp': ['nrc_id',
+                                                'register',
+                                                'ref_task',
+                                                'description',
+                                                'area',
+                                                'trade',
+                                                'ata',
+                                                'status',
+                                                'standard',
+                                                'total',
+                                                'mh_changed',
+                                                'remark',
+                                                ]
+                            }
+
+    for table_name, cur_fields in CHECKED_TABLE_FIELDS.items():
+        sql = f"""SELECT EXISTS (
+                                SELECT 1
+                                FROM sqlite_master
+                                WHERE type = 'table'
+                                AND name = '{table_name}'
+                                ) AS exist;"""
+        q = db_manager.query(sql)
+        q.first()
+        if q.value('exist'):
+            q = db_manager.query(f"PRAGMA table_info({table_name});")
+            table_fields = []
+            while q.next():
+                table_fields.append(q.value('name'))
+            if len(table_fields) != len(cur_fields):
+                # 备份旧表格
+                sql = f"""CREATE TABLE temp_table AS SELECT * FROM {table_name}"""
+                db_manager.query(sql)
+                # 删除原始表格
+                db_manager.query(f"DROP TABLE {table_name}")
+                # 按新表格sql创建表格
+                db_manager.query(TABLE_SQL[table_name])
+                # 将临时表格数据保存到新表格中
+                field_str = ','.join(table_fields)
+                sql = f"""INSERT INTO {table_name} ({field_str})
+                                                    SELECT {field_str} 
+                                                    FROM temp_table"""
+                db_manager.query(sql)
+                # 删除临时表格
+                db_manager.query("DROP TABLE temp_table")
 
 
 class DatabaseManager(object):

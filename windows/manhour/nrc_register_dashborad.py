@@ -1,4 +1,5 @@
 import os
+from xlsxwriter.workbook import Workbook, Worksheet
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
@@ -7,6 +8,7 @@ from PyQt5.QtCore import Qt, pyqtSlot, QDate, QDateTime
 from ..ui import Ui_RegisterNrcDailyDetailForm, Ui_NrcReportDetailForm
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
+from .cx_remark_dialog import CxRemarkInputDialog
 from windows.image_viewer import ImageViewer
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
@@ -34,7 +36,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
 
         self.ui = Ui_RegisterNrcDailyDetailForm()
         self.ui.setupUi(self)
-        # self.showMaximized()
+        self.showMaximized()
 
         self.ui.lineEditRegister.setText(register)
         self.ui.dateEdit.setDate(QDate(*[int(x) for x in report_date.split('-')]))
@@ -84,6 +86,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.ui.lineEditSearchNrcId.returnPressed.connect(self.on_btnSearch_clicked)
         self.ui.lineEditSearchRefTask.returnPressed.connect(self.on_btnSearch_clicked)
         self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearch_clicked)
+        self.ui.tbvHistory.doubleClicked.connect(lambda idx: self.on_btnHistoryDetail_clicked())
 
     @pyqtSlot()
     def on_btnSearch_clicked(self):
@@ -139,13 +142,15 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
     def on_btnExport_clicked(self):
         today = QDateTime.currentDateTime().toString('yyyy_MM_dd')
         filename = f'MH_NRC_REPORT_{today}.xlsx'
-        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename,
+                                                             "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
         save_path = Path(save_path).resolve()
         output_tr = []
         # 创建Excel Writer对象
         writer = pd.ExcelWriter(save_path)
+        workbook: Workbook = writer.book
 
         # 读取导出模式
         options = QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel
@@ -158,10 +163,12 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             output_tr.append(list(self.tableviews.keys())[self.ui.tabWidgetNrcByTR.currentIndex()])
 
         for tr in output_tr:
-            table = self.tableviews[tr]
+            table: QtWidgets.QTableView = self.tableviews[tr]
             model: QtGui.QStandardItemModel = table.model()
             data = []
             for row in range(model.rowCount()):
+                if table.isRowHidden(row):
+                    continue
                 temp = []
                 for col in range(model.columnCount()):
                     item = model.item(row, col)
@@ -175,20 +182,18 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             df.to_excel(writer, sheet_name=tr, index=False)
 
             # 获取Excel工作簿和工作表对象
-            worksheet = writer.sheets[tr]
+            worksheet: Worksheet = writer.sheets[tr]
 
             # 设置数值列的格式为小数两位
+            _format = workbook.add_format({'num_format': '0.00'})
             for col in ['Total', 'Changed']:
                 column_index = df.columns.get_loc(col)
-                column_letter = chr(ord('A') + column_index)
-                for cell in worksheet[column_letter]:
-                    cell.number_format = '0.00'
+                worksheet.set_column(column_index, column_index, 6, _format)
 
             # 设置日期列的格式为日期
+            _format = workbook.add_format({'num_format': 'yyyy-mm-dd'})
             column_index = df.columns.get_loc('Added_On')
-            column_letter = chr(ord('A') + column_index)
-            for cell in worksheet[column_letter]:
-                cell.number_format = 'yyyy-mm-dd'
+            worksheet.set_column(column_index, column_index, 10, _format)
 
         # 保存Excel文件
         writer.close()
@@ -200,7 +205,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
     def on_btnAddImage_clicked(self):
         table = list(self.tableviews.values())[self.ui.tabWidgetNrcByTR.currentIndex()]
         sel_model = table.selectionModel()
-        sel_rowIdxes = sel_model.selectedRows(column=self.tb_header_nrc.index('Changed'))
+        sel_rowIdxes = sel_model.selectedRows(column=self.tb_header_nrc.index('Nrc_Id'))
         if not sel_rowIdxes:
             QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
             return
@@ -234,7 +239,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
     def on_btnImage_clicked(self):
         table = list(self.tableviews.values())[self.ui.tabWidgetNrcByTR.currentIndex()]
         sel_model = table.selectionModel()
-        sel_rowIdxes = sel_model.selectedRows(column=self.tb_header_nrc.index('Changed'))
+        sel_rowIdxes = sel_model.selectedRows(column=self.tb_header_nrc.index('Nrc_Id'))
         if len(sel_rowIdxes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
@@ -681,7 +686,9 @@ class NrcReportDetailWin(QtWidgets.QWidget):
 
         # 更新Subtask表格数据
         cur_date = self.ui.dateEditToday.date().toString("yyyy-MM-dd")
-        self.init_table_subtask(self.ui.tbvSubtaskLatest, cur_date)
+        cur_total_mhr = self.init_table_subtask(self.ui.tbvSubtaskLatest, cur_date)
+        self.ui.lineEditSbtTotalCurrent.setText(f"{cur_total_mhr:.2f}")
+        self.init_table_cxRemark()
 
     @pyqtSlot()
     def on_btnExport_clicked(self):
@@ -760,7 +767,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnDelete_clicked(self):
-        sel_model = self.selection_model_remark
+        sel_model = self.sel_model_remark
         selected_indexes = sel_model.selectedRows(column=self.remark_field_num['id'])
         if not selected_indexes:
             QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
@@ -781,7 +788,8 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             self.tb_remark_model.select()
 
     def on_dateEditPast_userDateChanged(self, last_date):
-        self.init_table_subtask(self.ui.tbvSubtaskPast, last_date)
+        last_total_mhr = self.init_table_subtask(self.ui.tbvSubtaskPast, last_date)
+        self.ui.lineEditSbtTotalLast.setText(f"{last_total_mhr:.2f}")
 
     def on_tbvCxRemark_doubleClicked(self, index: QtCore.QModelIndex):
         row = index.row()
@@ -812,9 +820,10 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             lambda pos: self.show_table_header_menu(table, pos))
 
         # 更新表格数据
-        self.update_table_subtask_data(table, report_date)
+        return self.update_table_subtask_data(table, report_date)
 
     def update_table_subtask_data(self, table: QtWidgets.QTableView, report_date):
+        total_mhr = 0
         fields = ['item_no', 'description', 'mhr', 'trade', ]
         model: QtGui.QStandardItemModel = table.model()
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
@@ -832,7 +841,9 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             temp = []
             for field in fields:
                 if field == 'mhr':
-                    item = QtGui.QStandardItem(f"{self.query.value(field):.2f}")
+                    mhr = self.query.value(field)
+                    total_mhr += mhr
+                    item = QtGui.QStandardItem(f"{mhr:.2f}")
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 elif field == 'item_no':
                     item = QtGui.QStandardItem(str(self.query.value(field)))
@@ -841,6 +852,7 @@ class NrcReportDetailWin(QtWidgets.QWidget):
                     item = QtGui.QStandardItem(str(self.query.value(field)))
                 temp.append(item)
             model.appendRow(temp)
+        return total_mhr
 
     def init_table_cxRemark(self):
         h_header = self.ui.tbvCxRemark.horizontalHeader()
@@ -850,16 +862,16 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         self.tb_remark_model.setTable(self.tb_mhCxRemark)
 
         # 创建选择模型
-        self.selection_model_remark = QtCore.QItemSelectionModel(self.tb_remark_model)
+        self.sel_model_remark = QtCore.QItemSelectionModel(self.tb_remark_model)
 
         # 设置表格数据模型和选择模型
         self.ui.tbvCxRemark.setModel(self.tb_remark_model)
-        self.ui.tbvCxRemark.setSelectionModel(self.selection_model_remark)
+        self.ui.tbvCxRemark.setSelectionModel(self.sel_model_remark)
 
         # 设置表格标题
         self.remark_field_num = self.db.get_field_num(self.tb_remark_model)  # 获取字段名和序号
         for field, column in self.remark_field_num.items():  # 设置字段显示名
-            self.tb_remark_model.setHeaderData(column, Qt.Horizontal, self.tb_cxRemark_header_mapping[field])
+            self.tb_remark_model.setHeaderData(column, Qt.Horizontal, self.tb_mhCxRemark_mapping[field])
 
         # 设置表格视图属性
         for field, column in self.remark_field_num.items():  # 设置表格列宽度默认行为

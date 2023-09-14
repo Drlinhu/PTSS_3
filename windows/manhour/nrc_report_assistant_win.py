@@ -192,7 +192,6 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             if self.query.first():
                 return self.query.value('total')
             return 0.0
-
         # 导入前先清空临时表格
         self.query.exec("DELETE FROM MhNrcReportTemp")
         self.query.exec("DELETE FROM MhSubtaskTemp")
@@ -213,8 +212,10 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
         sheet_name_subtask = None
 
         settings = QSettings("mhr_import.ini", QSettings.IniFormat)  # 创建QSettings对象，指定.ini文件路径
+
         """ 识别文件 """
         xlsx = pd.ExcelFile(read_path)  # 读取整个页面
+
         # 识别NRC页面名称
         if not isinstance(settings.value("sheet_name/nrc"), list):
             msg = 'Value in mhr_import.ini must be end with `,`'
