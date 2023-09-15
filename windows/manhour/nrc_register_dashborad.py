@@ -72,15 +72,29 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.init_table_summary()
         self.init_table_nrc()
         self.init_history_table()
-        total_qty = 0
-        total_mhr = 0
+
+        # 设置界面信息
+        total_qty_tr = 0
+        total_mhr_tr = 0
         for tr, table in self.tableviews.items():
             model = table.model()
-            total_qty += model.rowCount()
+            total_qty_tr += model.rowCount()
             for row in range(model.rowCount()):
-                total_mhr += float(model.index(row, self.trade_fields.index('total')).data())
-        self.ui.lineEditTotalQty.setText(f"{total_qty:.2f}")
-        self.ui.lineEditTotalMhr.setText(f"{total_mhr:.2f}")
+                total_mhr_tr += float(model.index(row, self.trade_fields.index('total')).data())
+        self.ui.lineEditTotalQtyTR.setText(f"{total_qty_tr:.2f}")
+        self.ui.lineEditTotalMhrTR.setText(f"{total_mhr_tr:.2f}")
+
+        sql = f"""SELECT COUNT(*) AS qty,sum(total) AS total
+                  FROM {self.tb_name_nrc}
+                  WHERE register=:reg AND SUBSTR(nrc_id,1,2)=:proj_id AND report_date=:report_date"""
+        self.query.prepare(sql)
+        self.query.bindValue(':reg', register)
+        self.query.bindValue(':proj_id', proj_id)
+        self.query.bindValue(':report_date', self.report_date)
+        self.query.exec()
+        if self.query.first():
+            self.ui.lineEditTotalQtyReportS.setText(f"{self.query.value('qty'):.2f}")
+            self.ui.lineEditTotalMhrReport.setText(f"{self.query.value('total'):.2f}")
 
         # 设置槽函数
         self.ui.lineEditSearchNrcId.returnPressed.connect(self.on_btnSearch_clicked)
@@ -162,6 +176,8 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         else:
             output_tr.append(list(self.tableviews.keys())[self.ui.tabWidgetNrcByTR.currentIndex()])
 
+        df_dict = {'Total': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']),
+                   'Duplicated': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']), }
         for tr in output_tr:
             table: QtWidgets.QTableView = self.tableviews[tr]
             model: QtGui.QStandardItemModel = table.model()
@@ -179,10 +195,20 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                     temp.append(v)
                 data.append(temp)
             df = pd.DataFrame(data=data, columns=self.tb_header_nrc)
-            df.to_excel(writer, sheet_name=tr, index=False)
+            new_col = [tr] * df.shape[0]
+            df_temp = df.assign(Trade=new_col)
+            df_dict['Total'] = pd.concat([df_dict['Total'], df_temp], ignore_index=True)
+            df_dict[tr] = df
+
+        # 获取Nrc_Id重复行
+        df_dict['Duplicated'] = df_dict['Total'][df_dict['Total'].duplicated(subset='Nrc_Id', keep=False)]
+
+        # 写入并设置格式
+        for sheet_name, df in df_dict.items():
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
 
             # 获取Excel工作簿和工作表对象
-            worksheet: Worksheet = writer.sheets[tr]
+            worksheet: Worksheet = writer.sheets[sheet_name]
 
             # 设置数值列的格式为小数两位
             _format = workbook.add_format({'num_format': '0.00'})
@@ -791,6 +817,16 @@ class NrcReportDetailWin(QtWidgets.QWidget):
         last_total_mhr = self.init_table_subtask(self.ui.tbvSubtaskPast, last_date)
         self.ui.lineEditSbtTotalLast.setText(f"{last_total_mhr:.2f}")
 
+        sql = f"""SELECT SUM(total) FROM {self.tb_nrc_report} WHERE nrc_id=:nrc_id AND report_date=:report_date"""
+        self.query.prepare(sql)
+        self.query.bindValue(":nrc_id", self.nrc_id)
+        self.query.bindValue(":report_date", self.ui.dateEditPast.date().toString('yyyy-MM-dd'))
+        self.query.exec()
+        if self.query.first() and self.query.value(0):
+            self.ui.lineEditTotalLast.setText(f"{float(self.query.value(0)):.2f}")
+        else:
+            self.ui.lineEditTotalLast.setText("0.00")
+
     def on_tbvCxRemark_doubleClicked(self, index: QtCore.QModelIndex):
         row = index.row()
         data = {'id_': self.tb_remark_model.index(row, self.remark_field_num['id']).data(),
@@ -852,6 +888,18 @@ class NrcReportDetailWin(QtWidgets.QWidget):
                     item = QtGui.QStandardItem(str(self.query.value(field)))
                 temp.append(item)
             model.appendRow(temp)
+
+        # 获取report内工时
+        sql = f"""SELECT SUM(total) FROM {self.tb_nrc_report} WHERE nrc_id=:nrc_id AND report_date=:report_date"""
+        self.query.prepare(sql)
+        self.query.bindValue(":nrc_id", self.nrc_id)
+        self.query.bindValue(":report_date", self.ui.dateEditToday.date().toString('yyyy-MM-dd'))
+        self.query.exec()
+        if self.query.first():
+            self.ui.lineEditTotalCurrent.setText(f"{float(self.query.value(0)):.2f}")
+        else:
+            self.ui.lineEditTotalCurrent.setText("0.00")
+
         return total_mhr
 
     def init_table_cxRemark(self):

@@ -275,6 +275,8 @@ class ManhourWin(QtWidgets.QWidget):
                 proj_id = dialog.project_id.strip()
 
             """读取RTN页面"""
+            main_pkgId = ''
+            df_rtn_refPkg = None
             if sheet_names['rtn'] is not None:
                 # 读取识别description语句标记
                 ok, options = get_section_options(ini_file, 'default', 'desc_identification')
@@ -305,11 +307,21 @@ class ManhourWin(QtWidgets.QWidget):
 
                 # 按数据库表列顺序修改dataframe列顺序
                 df = df[TABLE_HEADER_MAPPING.values()]
+
                 # 获取缺少MH ID的行待后续特殊处理
                 df_no_mhId = df[~df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(
                     drop=True)
-                # 过滤掉缺少MH_Id的行
+
+                # 过滤掉缺少MH_Id的行并获取主package ID
                 df = df[df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(drop=True)
+                pattern = r'(?P<pkg_id>[A-Z]{3}-BMP-\d{4}-(\d{3}[A-Z]|\d{2}[A-Z]{2}|GEAR))'
+                df_pkg = df['Pkg_Id'].str.extractall(pattern)['pkg_id'].sort_values().drop_duplicates().tolist()
+                if not df_pkg:
+                    main_pkgId = df_pkg[0]
+                else:
+                    main_pkgId = df['Pkg_Id'].tolist()[0]
+
+                # 给无MH_Id的行补充必要信息，如mh_id和pkg_id
                 j = 0
                 for i in range(df_no_mhId.shape[0]):
                     if j > 18:
@@ -318,9 +330,16 @@ class ManhourWin(QtWidgets.QWidget):
                     for x in desc_marks:
                         if x.lower() in df_no_mhId.loc[i, 'Description'].lower():
                             df_no_mhId.loc[i, 'MH_Id'] = f'{proj_id}{j:0>5}'
+                            df_no_mhId.loc[i, 'Pkg_Id'] = main_pkgId
                             j += 1
+
+                # 合并df和df_no_mhId，并再次过滤缺少MH_Id的行
                 df = pd.concat([df, df_no_mhId], ignore_index=True)
                 df = df[df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(drop=True)
+
+                # 获取ref_pkg字典
+                df_rtn_refPkg = df[['Ref_Task', 'Pkg_Id']]
+
                 # 存入数据
                 sql = f"""REPLACE INTO {self.table_name}
                           VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})"""
@@ -374,6 +393,15 @@ class ManhourWin(QtWidgets.QWidget):
 
                 # 按数据库表列顺序修改dataframe列顺序
                 df = df[TABLE_HEADER_MAPPING.values()]
+
+                # 更新Package ID 字段 TODO
+                if df_rtn_refPkg is not None:
+                    for i in range(df.shape[0]):
+                        temp = df_rtn_refPkg[df_rtn_refPkg['Ref_Task'] == df.loc[i, 'Ref_Task']]['Pkg_Id'].tolist()
+                        if temp:
+                            df.loc[i, 'Pkg_Id'] = temp[0]
+                        else:
+                            df.loc[i, 'Pkg_Id'] = main_pkgId
 
                 # 存入数据
                 sql = f"""INSERT INTO {self.table_name}
