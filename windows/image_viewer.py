@@ -58,7 +58,7 @@ class ImageViewer(QtWidgets.QWidget):
                     self.close()
                     return
                 if self.im_index == len(self.ims):
-                    self.im_index = len(self.ims)-1
+                    self.im_index = len(self.ims) - 1
                 self.show_image()
             else:
                 QtWidgets.QMessageBox.critical(self, 'Information', f'Delete failed!\n{self.query.lastError().text()}')
@@ -70,7 +70,15 @@ class ImageViewer(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnSave_clicked(self):
-        pass
+        filter_str = "PNG Files (*.png);;JPEG Files (*.jpg *.jpeg);;All Files (*)"
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, caption="Save Image",
+                                                             directory=self.ims[self.im_index]['name'],
+                                                             filter=filter_str)
+        if not file_path:
+            return
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(self.ims[self.im_index]['image'])
+        pixmap.save(file_path, None, quality=-1)
 
     @pyqtSlot()
     def on_btnPrint_clicked(self):

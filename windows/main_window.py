@@ -22,8 +22,10 @@ class MainWindow(QMainWindow):
         self.setWindowState(Qt.WindowMaximized)  # 窗口最大化显示
         # 初始化数据库
         initialize_database()
+        self.db = DatabaseManager()
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        self.db.con.close()
         sys.exit()
 
     @pyqtSlot()
