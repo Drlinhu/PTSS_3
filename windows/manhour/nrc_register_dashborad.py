@@ -81,8 +81,8 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             total_qty_tr += model.rowCount()
             for row in range(model.rowCount()):
                 total_mhr_tr += float(model.index(row, self.trade_fields.index('total')).data())
-        self.ui.lineEditTotalQtyTR.setText(f"{total_qty_tr:.2f}")
-        self.ui.lineEditTotalMhrTR.setText(f"{total_mhr_tr:.2f}")
+        self.ui.lineEditTotalQtyThis.setText(f"{total_qty_tr:.2f}")
+        self.ui.lineEditTotalMhrThis.setText(f"{total_mhr_tr:.2f}")
 
         sql = f"""SELECT COUNT(*) AS qty,sum(total) AS total
                   FROM {self.tb_name_nrc}
@@ -93,8 +93,12 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.query.bindValue(':report_date', self.report_date)
         self.query.exec()
         if self.query.first():
-            self.ui.lineEditTotalQtyReportS.setText(f"{self.query.value('qty'):.2f}")
+            self.ui.lineEditTotalQtyReport.setText(f"{self.query.value('qty'):.2f}")
             self.ui.lineEditTotalMhrReport.setText(f"{self.query.value('total'):.2f}")
+
+        cur_idx = self.ui.tabWidgetNrcByTR.currentIndex()
+        tr, table = list(self.tableviews.items())[cur_idx]
+        self.update_tr_qty_mhr(tr, table)
 
         # 设置槽函数
         self.ui.lineEditSearchNrcId.returnPressed.connect(self.on_btnSearch_clicked)
@@ -123,6 +127,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             self.update_table_nrc(tr, table, filter_str)
         else:
             self.update_table_nrc(tr, table)
+        self.update_tr_qty_mhr(tr, table)
 
     def on_checkBoxChanged_stateChanged(self, state):
         # 2搭扣
@@ -136,6 +141,11 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                     changed_mhr = float(model.item(row, self.trade_fields.index('changed')).text())
                     if changed_mhr == 0:
                         table.hideRow(row)
+
+    def on_tabWidgetNrcByTR_tabBarClicked(self, cur_index: int):
+        tr = self.ui.tabWidgetNrcByTR.tabText(cur_index)
+        table: QtWidgets.QTableView = self.tableviews[tr]
+        self.update_tr_qty_mhr(tr, table)
 
     @pyqtSlot(str)
     def on_cbbSearchAddedOn_activated(self, date):
@@ -592,6 +602,19 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             brush = QtGui.QBrush(color)
             item.setBackground(brush)
 
+    def update_tr_qty_mhr(self, tr: str, table: QtWidgets.QTableView):
+        mhr = 0.0
+        qty = 0
+        model: QtGui.QStandardItemModel = table.model()
+        for row in range(model.rowCount()):
+            if not table.isRowHidden(row):
+                qty += 1
+                mhr += float(model.item(row, self.trade_fields.index('total')).text())
+
+        self.ui.labelTotalQtyTR.setText(f"TTL. QTY ({tr})")
+        self.ui.lineEditMhrTR.setText(f"{mhr:.2f}")
+        self.ui.lineEditQtyTR.setText(f"{qty}")
+
     def init_history_table(self):
         model = QtGui.QStandardItemModel()
         model.setHorizontalHeaderLabels(self.tb_header_history)
@@ -600,48 +623,6 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         h_header = self.ui.tbvHistory.horizontalHeader()
         h_header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(self.tb_header_history.index('Description'), QtWidgets.QHeaderView.Stretch)
-
-    def show_report_summary(self):
-        # self.table_main = "MhNrcReport"
-        # self.table_temp = "MhNrcReportTemp"
-
-        # 读取当前report工时总额
-        sql = f""" SELECT SUM(total) FROM {self.table_temp} """
-        self.query.exec(sql)
-        self.query.first()
-        cur_total = self.query.value(0) if self.query.value(0) else 0
-
-        # 获取机号和对应的Project ID
-        self.query.exec(f"SELECT nrc_id,register FROM {self.table_temp} LIMIT 1")
-        if self.query.first():
-            proj_id = self.query.value('nrc_id')[:2]
-            register = self.query.value('register')
-
-            # 读取report历史最新日期的工时总额
-            sql = f""" SELECT SUM(total) 
-                       FROM {self.table_main}
-                       WHERE register=:register AND nrc_id LIKE :proj_id AND report_date=(
-                                                                SELECT MAX(report_date) 
-                                                                FROM {self.table_main}
-                                                                WHERE register=:register AND nrc_id LIKE :proj_id)"""
-            self.query.prepare(sql)
-            self.query.bindValue(':register', register)
-            self.query.bindValue(':proj_id', proj_id + '%')
-            self.query.exec()
-            self.query.first()
-            last_total = self.query.value(0) if self.query.value(0) else 0
-        else:
-            last_total = 0
-
-        # 显示数据
-        self.ui.lineEditTotalCurrent.setText(f'{cur_total:.2f}')
-        self.ui.lineEditTotalLast.setText(f'{last_total:.2f}')
-        changed_total = cur_total - last_total
-        self.ui.lineEditTotalChanged.setText(f'{changed_total:.2f}')
-        if changed_total > 0:
-            self.ui.lineEditTotalChanged.setStyleSheet("background-color: #FFC0CB;")  # pink
-        else:
-            self.ui.lineEditTotalChanged.setStyleSheet("background-color: #90EE90;")  # light green
 
     def show_table_header_menu(self, table: QtWidgets.QTableView, pos):
         h_header = table.horizontalHeader()

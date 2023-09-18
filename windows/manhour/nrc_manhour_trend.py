@@ -88,9 +88,9 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         filter_str_1 = f"start_date>='{dt_start}' AND end_date<='{dt_end}'"
         if condition:
             filter_str_2 = " AND ".join([f"{f} LIKE '%{v}%'" for f, v in condition.items()])
-            data_model.setFilter(filter_str_1 + ' AND ' + filter_str_2)
+            data_model.setFilter(filter_str_1 + ' AND ' + filter_str_2+'ORDER BY start_date')
         else:
-            data_model.setFilter(filter_str_1)
+            data_model.setFilter(filter_str_1+'ORDER BY start_date')
         data_model.select()
 
     @pyqtSlot()
