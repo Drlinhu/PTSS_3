@@ -35,6 +35,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.tb_name_icw = 'ProcedureIcw'
         self.tb_name_image = 'ProcedureImage'
         self.save_model = 'NEW'
+        self.header_from_excel = list(self.tb_header_proc.values()) + ['Location', 'Access_Desc', 'Marker', 'CX_Remark']
         self.new_ims = []
 
         self.ui = Ui_ProcedureForm()
@@ -73,28 +74,36 @@ class ProcedureWin(QtWidgets.QWidget):
 
         df = pd.read_excel(read_path, nrows=0)
         # 验证数据字段完整性
-        for x in self.tb_header_proc.values():
+        for x in self.header_from_excel:
             if x not in df.columns:
                 QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
                 return
+
         # 读取并保存数据
         converters = {'Procedure_ID': lambda y: str(y).strip(),
                       'Description': lambda y: str(y).strip(),
+                      'Location': lambda y: str(y).strip(),
+                      'Access_Desc': lambda y: str(y).strip(),
+                      'Marker': lambda y: str(y).strip(),
+                      'CX_Remark': lambda y: str(y).strip(),
                       }
         df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
 
         model = self.ui.tbvProc.model()
-        query = QtSql.QSqlQuery(self.db.con)
-        sql = f"""REPLACE INTO {self.tb_name_proc}
-                  VALUES ({','.join(['?' for _ in range(model.columnCount())])})"""
-        query.prepare(sql)
-
         self.db.con.transaction()
+
+        # 保存proc_id和description
+        sql = f"""INSERT INTO {self.tb_name_proc}
+                  VALUES ({','.join([f':{field}' for field in self.tb_header_proc.keys()])})
+                  ON CONFLICT (proc_id) DO UPDATE SET
+                                      {','.join([f"{field}=CASE WHEN {field}=:{field} THEN {field} ELSE :{field} END"
+                                                 for field in self.tb_header_proc.keys()])}"""
+        self.query.prepare(sql)
         for i in range(df.shape[0]):
             for field, column in self.field_num_proc.items():
                 header = self.tb_header_proc[field]
-                query.addBindValue(df.loc[i, header])
-            if not query.exec_():
+                self.query.bindValue(f":{field}", df.loc[i, header])
+            if not self.query.exec():
                 self.db.con.rollback()
                 QtWidgets.QMessageBox.critical(self, 'Error', f'Failed\n{self.query.lastError().text()}')
                 return
@@ -108,21 +117,22 @@ class ProcedureWin(QtWidgets.QWidget):
         save_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", filename, "Excel Files (*.xlsx *.xls)")
         if not save_path:
             return
-        model = self.ui.tbvProc.model()
         save_path = Path(save_path).resolve()
-        # 创建工时记录DataFrame对象
-        data = []
-        header = []
-        for j in range(model.columnCount()):
-            header.append(model.headerData(j, Qt.Horizontal, Qt.DisplayRole))
 
+        model = self.ui.tbvProc.model()
+
+        """ 创建空的Dataframe """
+        data = []
         for i in range(model.rowCount()):
             row_data = []
             for j in range(model.columnCount()):
                 row_data.append(model.data(model.index(i, j), Qt.DisplayRole))
+            row_data += ['' for _ in range(len(self.header_from_excel) - model.columnCount())]
             data.append(row_data)
-        df = pd.DataFrame(data, columns=header)
+
+        df = pd.DataFrame(data=data, columns=self.header_from_excel)
         df.to_excel(save_path, index=False)
+
         # 打开保存文件夹
         os.startfile(save_path.parent)
 

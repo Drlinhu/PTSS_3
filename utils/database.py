@@ -212,6 +212,15 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
                                                   ON UPDATE CASCADE,
    ref     TEXT
 );""",
+             "ProcedureLabels":"""CREATE TABLE IF NOT EXISTS ProcedureLabels (
+    proc_id     TEXT PRIMARY KEY
+                     REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                    ON UPDATE CASCADE,
+    location    TEXT DEFAULT "",
+    access_desc TEXT DEFAULT "",
+    marker      TEXT DEFAULT "",
+    remark      TEXT DEFAULT ""
+);""",
              }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

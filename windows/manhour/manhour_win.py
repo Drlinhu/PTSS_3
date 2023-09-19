@@ -407,7 +407,7 @@ class ManhourWin(QtWidgets.QWidget):
                 sql = f"""INSERT INTO {self.table_name}
                           VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})
                           ON CONFLICT (mh_id) DO UPDATE SET
-                          {','.join([f"{k}=CASE WHEN {k}>:{k} THEN {k} ELSE :{k} END"
+                          {','.join([f"{k}=CASE WHEN {k}>:{k} OR {k}!=:{k} THEN {k} ELSE :{k} END"
                                      for k in TABLE_HEADER_MAPPING.keys()])}"""
                 self.query.prepare(sql)
                 for i in range(df.shape[0]):
