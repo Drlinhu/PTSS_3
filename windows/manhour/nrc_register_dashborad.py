@@ -1076,7 +1076,7 @@ class NrcMhrTbcInputDialog(QtWidgets.QDialog):
         charged = self.ui.doubleSpinBoxCharged.value()
         agreed = self.ui.doubleSpinBoxAgreed.value()
         remark = self.ui.plainTextEditRemark.toPlainText()
-        sql = "REPLACE INTO MhNrcToBeCharged VALUES (:nrc_id,:charged,:agreed,,:remark)"
+        sql = "REPLACE INTO MhNrcToBeCharged VALUES (:nrc_id,:charged,:agreed,:remark)"
         self.query.prepare(sql)
         self.query.bindValue(":nrc_id", self.nrc_id)
         self.query.bindValue(":charged", str(charged))
