@@ -18,6 +18,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
     tb_header_summary = {"Horizontal": ["AE", "AI", "AV", "CL", "GW", "PT", "SM", "SS", "TOTAL", ],
                          "Vertical": ["CAB", "EMP", "ENG", "F/T", "FUS", "LDG", "LWR", "WNG", "TOTAL", ], }
     tb_header_nrc = ["Nrc_Id", "Ref_Task", "Description", "Area", "Status", "Total", "Added_On", "Changed", "Remark",
+                     "Charged", "Agreed",
                      ]
     tb_header_history = ['MH_ID', 'Register', 'Description', 'Total', 'Simis']
 
@@ -66,7 +67,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                            'SM': self.ui.tbvSM,
                            'SS': self.ui.tbvSS}
         self.trade_fields = ['nrc_id', 'ref_task', 'description', 'area', 'status', 'total', 'added_on', 'changed',
-                             'remark']
+                             'remark', 'charged', 'agreed']
 
         # 初始化表格
         self.init_table_summary()
@@ -233,8 +234,8 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             output_tr.append(list(self.tableviews.keys())[self.ui.tabWidgetNrcByTR.currentIndex()])
 
         # 额外增加excel 页面
-        df_dict = {'Total': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']),
-                   'Duplicated': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']), }
+        df_dict = {'Total': pd.DataFrame(columns=self.tb_header_nrc + ['Charged_Remark', 'Trade']),
+                   'Duplicated': pd.DataFrame(columns=self.tb_header_nrc + ['Charged_Remark', 'Trade']), }
         for tr in output_tr:
             table: QtWidgets.QTableView = self.tableviews[tr]
             model: QtGui.QStandardItemModel = table.model()
@@ -245,7 +246,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                 temp = []
                 for col in range(model.columnCount()):
                     item = model.item(row, col)
-                    if col in [5, 7]:  # "Total", "Changed",
+                    if col in [5, 7, 9, 10]:  # "Total", "Changed", "Charged", "Agreed",
                         v = float(item.text())
                     else:
                         v = item.text()
@@ -253,8 +254,23 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                 data.append(temp)
             df = pd.DataFrame(data=data, columns=self.tb_header_nrc)
 
-            new_col = [tr] * df.shape[0]
-            df_temp = df.assign(Trade=new_col)
+            # 添加'Charged_Remark'列需要查询数据库
+            sql = "SELECT remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
+            self.query.prepare(sql)
+            charged_remark_col = []
+            for i in range(df.shape[0]):
+                self.query.bindValue(":nrc_id", df.loc[i, 'Nrc_Id'])
+                if self.query.exec() and self.query.first():
+                    charged_remark_col.append(self.query.value('remark'))
+                else:
+                    charged_remark_col.append('')
+            df = df.assign(Charged_Remark=charged_remark_col)
+
+            # 导出的dataframe增加Trade列
+            trade_col = [tr] * df.shape[0]
+            df_temp = df.assign(Trade=trade_col)
+
+            # 合并各个Trade数据到Total
             df_dict['Total'] = pd.concat([df_dict['Total'], df_temp], ignore_index=True)
             df_dict[tr] = df
 
@@ -578,21 +594,25 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         model = table.model()
         model.removeRows(0, model.rowCount())
         if filter_str:
-            sql = f"""SELECT nrc_id,ref_task,description,area,status,total,remark,
-                             min(report_date) as added_on,max(report_date) as latest_date
-                      FROM MhNrcReport
-                      WHERE register=:register AND SUBSTR(nrc_id,1,2)=:proj_id AND trade=:trade 
-                            AND report_date=:report_date AND {filter_str}
-                      GROUP BY nrc_id
-                      ORDER BY nrc_id ASC"""
+            sql = f"""SELECT t1.nrc_id,ref_task,description,area,status,total,t1.remark,
+                             min(report_date) as added_on,max(report_date) as latest_date,
+                             COALESCE (t2.charged,0.0) AS charged,COALESCE(t2.agreed,0.0) AS agreed
+                      FROM MhNrcReport AS t1
+                      LEFT JOIN MhNrcToBeCharged AS t2 ON t1.nrc_id=t2.nrc_id
+                      WHERE register=:register AND SUBSTR(t1.nrc_id,1,2)=:proj_id AND trade=:trade 
+                            AND report_date<=:report_date AND {filter_str}
+                      GROUP BY t1.nrc_id
+                      ORDER BY t1.nrc_id ASC"""
         else:
-            sql = f"""SELECT nrc_id,ref_task,description,area,status,total,remark,
-                             min(report_date) as added_on,max(report_date) as latest_date
-                      FROM MhNrcReport
-                      WHERE register=:register AND SUBSTR(nrc_id,1,2)=:proj_id AND trade=:trade 
-                            AND report_date=:report_date
-                      GROUP BY nrc_id
-                      ORDER BY nrc_id ASC"""
+            sql = f"""SELECT t1.nrc_id,ref_task,description,area,status,total,t1.remark,
+                             min(report_date) as added_on,max(report_date) as latest_date,
+                             COALESCE (t2.charged,0.0) AS charged,COALESCE(t2.agreed,0.0) AS agreed
+                      FROM MhNrcReport AS t1
+                      LEFT JOIN MhNrcToBeCharged AS t2 ON t1.nrc_id=t2.nrc_id
+                      WHERE register=:register AND SUBSTR(t1.nrc_id,1,2)=:proj_id AND trade=:trade 
+                            AND report_date<=:report_date
+                      GROUP BY t1.nrc_id
+                      ORDER BY t1.nrc_id ASC"""
         # 获取最新日期的报告
         self.query.prepare(sql)
         self.query.bindValue(":register", self.register)
@@ -603,7 +623,8 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         while self.query.next():
             temp = []
             for field in self.trade_fields:
-                if field == 'total':
+                if field in ['total', 'charged', 'agreed']:
+                    print(field, self.query.value(field))
                     item = QtGui.QStandardItem(f"{self.query.value(field):.2f}")
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 elif field == 'changed':

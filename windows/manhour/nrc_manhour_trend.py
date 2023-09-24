@@ -25,9 +25,9 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         self.table_reg_proj = "RegisterProjectId"
         self.db = DatabaseManager()
         self.query = QtSql.QSqlQuery(self.db.con)
-
         self.ui = Ui_RegisterProjectIdForm()
         self.ui.setupUi(self)
+        self.setFixedSize(1000, 600)
         self.ui.dateEditSearchStart.setDate(QDate.currentDate().addMonths(-3))
         self.ui.dateEditSearchEnd.setDate(QDate.currentDate().addYears(1))
 
@@ -88,9 +88,9 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         filter_str_1 = f"start_date>='{dt_start}' AND end_date<='{dt_end}'"
         if condition:
             filter_str_2 = " AND ".join([f"{f} LIKE '%{v}%'" for f, v in condition.items()])
-            data_model.setFilter(filter_str_1 + ' AND ' + filter_str_2+'ORDER BY start_date')
+            data_model.setFilter(filter_str_1 + ' AND ' + filter_str_2 + 'ORDER BY start_date')
         else:
-            data_model.setFilter(filter_str_1+'ORDER BY start_date')
+            data_model.setFilter(filter_str_1 + 'ORDER BY start_date')
         data_model.select()
 
     @pyqtSlot()

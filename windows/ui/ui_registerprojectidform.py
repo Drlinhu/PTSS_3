@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_RegisterProjectIdForm(object):
     def setupUi(self, RegisterProjectIdForm):
         RegisterProjectIdForm.setObjectName("RegisterProjectIdForm")
-        RegisterProjectIdForm.resize(872, 505)
+        RegisterProjectIdForm.resize(922, 517)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -212,6 +212,8 @@ class Ui_RegisterProjectIdForm(object):
         self.tbvMhDailyTotal.horizontalHeader().setSortIndicatorShown(True)
         self.gridLayout_3.addWidget(self.tbvMhDailyTotal, 1, 0, 1, 1)
         self.horizontalLayout.addWidget(self.frame_7)
+        self.horizontalLayout.setStretch(0, 1)
+        self.horizontalLayout.setStretch(1, 1)
 
         self.retranslateUi(RegisterProjectIdForm)
         self.ccbSearchStaus.setCurrentIndex(1)
