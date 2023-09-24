@@ -119,21 +119,21 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.ui.tbvSM.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.ui.tbvSS.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.ui.tbvAE.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvAE, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvAE, pos))
         self.ui.tbvAI.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvAI, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvAI, pos))
         self.ui.tbvAV.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvAV, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvAV, pos))
         self.ui.tbvCL.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvCL, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvCL, pos))
         self.ui.tbvGW.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvGW, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvGW, pos))
         self.ui.tbvPT.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvPT, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvPT, pos))
         self.ui.tbvSM.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvSM, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvSM, pos))
         self.ui.tbvSS.horizontalHeader().customContextMenuRequested.connect(
-            lambda pos: self.show_table_header_menu(self.ui.tbvSS, pos))
+            lambda pos: self.show_tb_header_menu(self.ui.tbvSS, pos))
 
         # 设置表格右击弹出菜单
         self.ui.tbvAE.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -144,14 +144,14 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.ui.tbvPT.setContextMenuPolicy(Qt.CustomContextMenu)
         self.ui.tbvSM.setContextMenuPolicy(Qt.CustomContextMenu)
         self.ui.tbvSS.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.ui.tbvAE.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAE, pos))
-        self.ui.tbvAI.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAI, pos))
-        self.ui.tbvAV.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAV, pos))
-        self.ui.tbvCL.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvCL, pos))
-        self.ui.tbvGW.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvGW, pos))
-        self.ui.tbvPT.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvPT, pos))
-        self.ui.tbvSM.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvSM, pos))
-        self.ui.tbvSS.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvSS, pos))
+        self.ui.tbvAE.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvAE, pos))
+        self.ui.tbvAI.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvAI, pos))
+        self.ui.tbvAV.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvAV, pos))
+        self.ui.tbvCL.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvCL, pos))
+        self.ui.tbvGW.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvGW, pos))
+        self.ui.tbvPT.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvPT, pos))
+        self.ui.tbvSM.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvSM, pos))
+        self.ui.tbvSS.customContextMenuRequested.connect(lambda pos: self.show_tb_context_menu(self.ui.tbvSS, pos))
 
     @pyqtSlot()
     def on_btnSearch_clicked(self):
@@ -699,7 +699,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         h_header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(self.tb_header_history.index('Description'), QtWidgets.QHeaderView.Stretch)
 
-    def show_table_header_menu(self, table: QtWidgets.QTableView, pos):
+    def show_tb_header_menu(self, table: QtWidgets.QTableView, pos):
         h_header = table.horizontalHeader()
         # 创建右键菜单
         menu = QtWidgets.QMenu(self)
@@ -725,7 +725,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         else:
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
 
-    def show_table_context_menu(self, table: QtWidgets.QTableView, pos):
+    def show_tb_context_menu(self, table: QtWidgets.QTableView, pos):
         index = table.indexAt(pos)
         # 创建菜单
         menu = QtWidgets.QMenu(self)
@@ -742,6 +742,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         nrc_id = model.item(index.row(), self.trade_fields.index('nrc_id')).text()
         dialog = NrcMhrTbcInputDialog(nrc_id)
         dialog.exec()
+        self.on_btnSearch_clicked()
 
 
 class NrcReportDetailWin(QtWidgets.QWidget):
