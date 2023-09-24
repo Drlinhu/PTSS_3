@@ -1,8 +1,8 @@
 import os, re
 from pathlib import Path
 import pandas as pd
-from PyQt5 import QtWidgets, QtSql, QtCore
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings
+from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from ..ui import Ui_GeneralInputDialog
@@ -263,13 +263,13 @@ class ManhourWin(QtWidgets.QWidget):
                 r = re.search(r'project ID:.*(?P<proj_id>[A-Z]{2})', text, re.IGNORECASE)
                 proj_id = r.group('proj_id')
 
-            if not ac_type or not register or not proj_id:
-                dialog = GeneralRegisterInputDialog()
+            dialog = GeneralRegisterInputDialog()
+            while not ac_type or not register or not proj_id:
+                msg = "Register and Project ID should not be empty."
+                QtWidgets.QMessageBox.warning(self, 'Warning', msg)
                 dialog.exec()
-                while dialog.is_ok and not dialog.register:
-                    msg = "Register should not be empty"
-                    QtWidgets.QMessageBox.warning(self, 'Warning', msg)
-                    dialog.exec()
+                if not dialog.is_ok:
+                    return
                 ac_type = dialog.ac_type
                 register = dialog.register.strip()
                 proj_id = dialog.project_id.strip()
@@ -277,7 +277,15 @@ class ManhourWin(QtWidgets.QWidget):
             """读取RTN页面"""
             main_pkgId = ''
             df_rtn_refPkg = None
+            sql = f"""INSERT INTO {self.table_name}
+                      VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})
+                      ON CONFLICT (mh_id) DO UPDATE SET
+                      {','.join([f"{k}=CASE WHEN {k}>=:{k} THEN {k} ELSE :{k} END"
+                                 for k in TABLE_HEADER_MAPPING.keys()])}"""
+            self.query.prepare(sql)
+
             if sheet_names['rtn'] is not None:
+                print('读取RTN页面')
                 # 读取识别description语句标记
                 ok, options = get_section_options(ini_file, 'default', 'desc_identification')
                 if not ok:
@@ -286,14 +294,17 @@ class ManhourWin(QtWidgets.QWidget):
                 desc_marks = options
 
                 # 读取RTN表格
-                df = pd.read_excel(xlsx, sheet_name=sheet_names['rtn'], keep_default_na=False)
+                converters = {page_header['rtn']['ATA']: lambda y: str(y),
+                              page_header['rtn']['Zone']: lambda y: str(y), }
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['rtn'], keep_default_na=False, converters=converters)
+                df.fillna('', inplace=True)
 
                 # 修改列名为格式列，方便导入数据库
                 df.rename(columns={v: k for k, v in page_header['rtn'].items() if v}, inplace=True)
 
                 # 添加缺失的列
                 for ab_header in absence_header['rtn']:
-                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill']:
+                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill', 'Skill', 'Unskill', 'Total']:
                         default_value = 0.0
                     else:
                         default_value = ""
@@ -307,7 +318,6 @@ class ManhourWin(QtWidgets.QWidget):
 
                 # 按数据库表列顺序修改dataframe列顺序
                 df = df[TABLE_HEADER_MAPPING.values()]
-
                 # 获取缺少MH ID的行待后续特殊处理
                 df_no_mhId = df[~df['MH_Id'].str.contains(r'[A-Z]{2}\d{5}', case=False, regex=True)].reset_index(
                     drop=True)
@@ -341,9 +351,6 @@ class ManhourWin(QtWidgets.QWidget):
                 df_rtn_refPkg = df[['Ref_Task', 'Pkg_Id']]
 
                 # 存入数据
-                sql = f"""REPLACE INTO {self.table_name}
-                          VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})"""
-                self.query.prepare(sql)
                 for i in range(df.shape[0]):
                     for k, v in TABLE_HEADER_MAPPING.items():
                         self.query.bindValue(f":{k}", str(df.loc[i, v]))
@@ -354,47 +361,44 @@ class ManhourWin(QtWidgets.QWidget):
 
             """读取NRC页面"""
             if sheet_names['nrc'] is not None:
+                print('读取NRC页面')
                 # 读取识别standard语句标记
                 ok, options = get_section_options(ini_file, 'standard', 'marks')
                 if not ok:
                     QtWidgets.QMessageBox.critical(self, 'Error', options)
                     return
                 standard_mark = options
-
-                df = pd.read_excel(xlsx, sheet_name=sheet_names['nrc'])
+                converters = {page_header['nrc']['ATA']: lambda y: str(y),
+                              page_header['nrc']['Zone']: lambda y: str(y), }
+                df = pd.read_excel(xlsx, sheet_name=sheet_names['nrc'], converters=converters)
                 exclude_cols = [page_header['nrc']['MH_Id'], ]  # 指定要排除的列
                 df = df.dropna(subset=exclude_cols)
                 df.fillna('', inplace=True)
-
                 # 修改列名为格式列，方便导入数据库
                 df.rename(columns={v: k for k, v in page_header['nrc'].items() if v}, inplace=True)
 
                 # 添加缺失的列
                 for ab_header in absence_header['nrc']:
-                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill']:
+                    if ab_header in ['D_Skill', 'D_Total', 'D_Unskill', 'Skill', 'Unskill', 'Total']:
                         default_value = 0.0
                     else:
                         default_value = ""
                     df[ab_header] = [default_value for _ in range(df.shape[0])]
-
                 # 添加Class, Register和Standard列
                 df['Class'] = ['NRC' for _ in range(df.shape[0])]
                 df['Register'] = [register for _ in range(df.shape[0])]
                 df['Ac_Type'] = [ac_type for _ in range(df.shape[0])]
+                df['Standard'] = ['N' for _ in range(df.shape[0])]
 
-                standard_value = []
                 for i in range(df.shape[0]):
                     for mark in standard_mark:
                         if mark.lower() in str(df.loc[i, 'Remark']).lower():
-                            standard_value.append('Y')
-                        else:
-                            standard_value.append('N')
-                df['Standard'] = standard_value
-
+                            df.loc[i, 'Standard'] = 'Y'
+                            break
                 # 按数据库表列顺序修改dataframe列顺序
                 df = df[TABLE_HEADER_MAPPING.values()]
 
-                # 更新Package ID 字段 TODO
+                # 更新Package ID 字段
                 if df_rtn_refPkg is not None:
                     for i in range(df.shape[0]):
                         temp = df_rtn_refPkg[df_rtn_refPkg['Ref_Task'] == df.loc[i, 'Ref_Task']]['Pkg_Id'].tolist()
@@ -404,12 +408,6 @@ class ManhourWin(QtWidgets.QWidget):
                             df.loc[i, 'Pkg_Id'] = main_pkgId
 
                 # 存入数据
-                sql = f"""INSERT INTO {self.table_name}
-                          VALUES ({','.join([f':{k}' for k in TABLE_HEADER_MAPPING.keys()])})
-                          ON CONFLICT (mh_id) DO UPDATE SET
-                          {','.join([f"{k}=CASE WHEN {k}>:{k} OR {k}!=:{k} THEN {k} ELSE :{k} END"
-                                     for k in TABLE_HEADER_MAPPING.keys()])}"""
-                self.query.prepare(sql)
                 for i in range(df.shape[0]):
                     for k, v in TABLE_HEADER_MAPPING.items():
                         self.query.bindValue(f":{k}", str(df.loc[i, v]))
@@ -515,12 +513,19 @@ class ManhourWin(QtWidgets.QWidget):
         for file_path in file_paths:
             with open(file_path, 'rb') as f:
                 image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+                # 读取图片数据并创建 QImage 对象
+                q_image = QtGui.QImage.fromData(image_data)
+                # 将 QImage 对象以指定格式和压缩参数保存为字节数据
+                byte_array = QtCore.QByteArray()
+                buffer = QtCore.QBuffer(byte_array)
+                buffer.open(QtCore.QIODevice.WriteOnly)
+                q_image.save(buffer, "JPEG", 50)  # 保存为 jpeg 格式的字节数据
             path = Path(file_path)
             for index in sel_rowIndexes:
                 self.query.bindValue(':id', None)
                 self.query.bindValue(':mh_id', index.data())
                 self.query.bindValue(':name', path.name)
-                self.query.bindValue(':image', image_data)
+                self.query.bindValue(':image', byte_array)
                 if not self.query.exec():
                     self.db.con.rollback()
                     QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())

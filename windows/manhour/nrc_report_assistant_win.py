@@ -192,6 +192,7 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             if self.query.first():
                 return self.query.value('total')
             return 0.0
+
         # 导入前先清空临时表格
         self.query.exec("DELETE FROM MhNrcReportTemp")
         self.query.exec("DELETE FROM MhSubtaskTemp")
@@ -262,6 +263,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             else:
                 msg = f'{field} in NRC page not found.'
                 QtWidgets.QMessageBox.warning(self, 'Warning', msg)
+                if field in ['Total']:
+                    return
                 header_nrc[field] = ''
 
         # 读取NRC数据

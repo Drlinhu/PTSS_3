@@ -5,7 +5,7 @@ import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSlot, QDate, QDateTime
 
-from ..ui import Ui_RegisterNrcDailyDetailForm, Ui_NrcReportDetailForm
+from ..ui import Ui_RegisterNrcDailyDetailForm, Ui_NrcReportDetailForm, Ui_MhNrcTbcInputDialog
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .cx_remark_dialog import CxRemarkInputDialog
@@ -17,12 +17,12 @@ from utils.nrc_corpus import *
 class RegisterNrcDailyWin(QtWidgets.QWidget):
     tb_header_summary = {"Horizontal": ["AE", "AI", "AV", "CL", "GW", "PT", "SM", "SS", "TOTAL", ],
                          "Vertical": ["CAB", "EMP", "ENG", "F/T", "FUS", "LDG", "LWR", "WNG", "TOTAL", ], }
-    tb_header_nrc = ["Nrc_Id", "Ref_Task", "Description", "Area", "Status", "Total", "Added_On", "Changed", "Remark"]
+    tb_header_nrc = ["Nrc_Id", "Ref_Task", "Description", "Area", "Status", "Total", "Added_On", "Changed", "Remark",
+                     ]
     tb_header_history = ['MH_ID', 'Register', 'Description', 'Total', 'Simis']
 
     def __init__(self, report_date, register, proj_id, parent=None):
         super(RegisterNrcDailyWin, self).__init__(parent)
-        self.report_date = report_date
         self.register = register
         self.proj_id = proj_id
         self.total_qty = 0
@@ -50,7 +50,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.query.prepare(sql)
         self.query.bindValue(':reg', register)
         self.query.bindValue(':proj_id', proj_id)
-        self.query.bindValue(':report_date', self.report_date)
+        self.query.bindValue(':report_date', self.ui.dateEdit.date().toString('yyyy-MM-dd'))
         self.query.exec()
         self.added_date = []
         while self.query.next():
@@ -90,7 +90,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.query.prepare(sql)
         self.query.bindValue(':reg', register)
         self.query.bindValue(':proj_id', proj_id)
-        self.query.bindValue(':report_date', self.report_date)
+        self.query.bindValue(':report_date', self.ui.dateEdit.date().toString('yyyy-MM-dd'))
         self.query.exec()
         if self.query.first():
             self.ui.lineEditTotalQtyReport.setText(f"{self.query.value('qty'):.2f}")
@@ -105,6 +105,52 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.ui.lineEditSearchRefTask.returnPressed.connect(self.on_btnSearch_clicked)
         self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearch_clicked)
         self.ui.tbvHistory.doubleClicked.connect(lambda idx: self.on_btnHistoryDetail_clicked())
+        self.ui.dateEdit.dateChanged.connect(lambda dt: self.on_btnSearch_clicked())
+        self.ui.dateEdit.dateChanged.connect(lambda dt: self.update_table_summary_data())
+
+        # 设置表格视图的水平标题右击弹出菜单
+        self.ui.tbvAE.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAI.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAV.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvCL.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvGW.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvPT.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvSM.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvSS.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAE.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvAE, pos))
+        self.ui.tbvAI.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvAI, pos))
+        self.ui.tbvAV.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvAV, pos))
+        self.ui.tbvCL.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvCL, pos))
+        self.ui.tbvGW.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvGW, pos))
+        self.ui.tbvPT.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvPT, pos))
+        self.ui.tbvSM.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvSM, pos))
+        self.ui.tbvSS.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos: self.show_table_header_menu(self.ui.tbvSS, pos))
+
+        # 设置表格右击弹出菜单
+        self.ui.tbvAE.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAI.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAV.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvCL.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvGW.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvPT.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvSM.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvSS.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.ui.tbvAE.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAE, pos))
+        self.ui.tbvAI.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAI, pos))
+        self.ui.tbvAV.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvAV, pos))
+        self.ui.tbvCL.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvCL, pos))
+        self.ui.tbvGW.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvGW, pos))
+        self.ui.tbvPT.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvPT, pos))
+        self.ui.tbvSM.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvSM, pos))
+        self.ui.tbvSS.customContextMenuRequested.connect(lambda pos: self.show_table_context_menu(self.ui.tbvSS, pos))
 
     @pyqtSlot()
     def on_btnSearch_clicked(self):
@@ -186,6 +232,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         else:
             output_tr.append(list(self.tableviews.keys())[self.ui.tabWidgetNrcByTR.currentIndex()])
 
+        # 额外增加excel 页面
         df_dict = {'Total': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']),
                    'Duplicated': pd.DataFrame(columns=self.tb_header_nrc + ['Trade']), }
         for tr in output_tr:
@@ -198,13 +245,14 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                 temp = []
                 for col in range(model.columnCount()):
                     item = model.item(row, col)
-                    if col in [5, 7]:
+                    if col in [5, 7]:  # "Total", "Changed",
                         v = float(item.text())
                     else:
                         v = item.text()
                     temp.append(v)
                 data.append(temp)
             df = pd.DataFrame(data=data, columns=self.tb_header_nrc)
+
             new_col = [tr] * df.shape[0]
             df_temp = df.assign(Trade=new_col)
             df_dict['Total'] = pd.concat([df_dict['Total'], df_temp], ignore_index=True)
@@ -444,7 +492,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.update_table_summary_data()
 
     def update_table_summary_data(self):
-        def get_summary_data(date) -> pd.DataFrame:
+        def get_summary_data(report_date) -> pd.DataFrame:
             row_count = len(self.tb_header_summary["Vertical"])
             column_count = len(self.tb_header_summary["Horizontal"])
             df = pd.DataFrame(data=0.0, index=range(row_count), columns=range(column_count), )
@@ -458,7 +506,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             self.query.prepare(sql)
             self.query.bindValue(":register", self.register)
             self.query.bindValue(":proj_id", self.proj_id)
-            self.query.bindValue(":report_date", date)
+            self.query.bindValue(":report_date", report_date)
             self.query.exec()
             while self.query.next():
                 tr = self.query.value('trade')
@@ -468,12 +516,16 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             df.loc['TOTAL'] = df.loc['CAB':'WNG', :].sum(axis=0)
             return df
 
-        cur_date = self.report_date
+        cur_date = self.ui.dateEdit.date().toString('yyyy-MM-dd')
         if len(self.added_date) > 1:
-            idx = self.added_date.index(cur_date)
-            last_date = self.added_date[idx if idx == 0 else idx - 1]
+            try:
+                idx = self.added_date.index(cur_date)
+                last_date = self.added_date[idx if idx == 0 else idx - 1]
+            except:
+                last_date = cur_date
         else:
             last_date = cur_date
+
         df_last = get_summary_data(last_date)
         df_cur = get_summary_data(cur_date)
         df_diff = df_cur.sub(df_last).round(2)
@@ -481,6 +533,12 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         # 更新表数据
         model_mhr: QtGui.QStandardItemModel = self.ui.tbvMhr.model()
         model_chg: QtGui.QStandardItemModel = self.ui.tbvMhrChanged.model()
+        model_mhr.removeRows(0, df_cur.shape[0])
+        model_chg.removeRows(0, df_cur.shape[0])
+        tableviews = [self.ui.tbvMhr, self.ui.tbvMhrChanged]
+        for table in tableviews:
+            model = table.model()
+            model.setVerticalHeaderLabels(self.tb_header_summary["Vertical"])
         for i in range(df_cur.shape[0]):
             for j in range(df_cur.shape[1]):
                 item_mhr = QtGui.QStandardItem(f"{df_cur.iloc[i, j]:.2f}")
@@ -511,10 +569,6 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             h_header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
             h_header.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
 
-            # 设置表格视图的水平标题右击弹出菜单
-            h_header.setContextMenuPolicy(Qt.CustomContextMenu)
-            h_header.customContextMenuRequested.connect(lambda pos: self.show_table_header_menu(table, pos))
-
             # 设置槽函数
             table.doubleClicked.connect(self.tbv_tr_double_clicked)
 
@@ -528,7 +582,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                              min(report_date) as added_on,max(report_date) as latest_date
                       FROM MhNrcReport
                       WHERE register=:register AND SUBSTR(nrc_id,1,2)=:proj_id AND trade=:trade 
-                            AND report_date<=:report_date AND {filter_str}
+                            AND report_date=:report_date AND {filter_str}
                       GROUP BY nrc_id
                       ORDER BY nrc_id ASC"""
         else:
@@ -536,7 +590,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                              min(report_date) as added_on,max(report_date) as latest_date
                       FROM MhNrcReport
                       WHERE register=:register AND SUBSTR(nrc_id,1,2)=:proj_id AND trade=:trade 
-                            AND report_date<=:report_date
+                            AND report_date=:report_date
                       GROUP BY nrc_id
                       ORDER BY nrc_id ASC"""
         # 获取最新日期的报告
@@ -544,7 +598,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         self.query.bindValue(":register", self.register)
         self.query.bindValue(":proj_id", self.proj_id)
         self.query.bindValue(":trade", tr)
-        self.query.bindValue(":report_date", self.report_date)
+        self.query.bindValue(":report_date", self.ui.dateEdit.date().toString('yyyy-MM-dd'))
         self.query.exec()
         while self.query.next():
             temp = []
@@ -649,6 +703,24 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+    def show_table_context_menu(self, table: QtWidgets.QTableView, pos):
+        index = table.indexAt(pos)
+        # 创建菜单
+        menu = QtWidgets.QMenu(self)
+        # 创建操作
+        action_set_tbc = QtWidgets.QAction("Set charged mhr", self)
+        action_set_tbc.triggered.connect(lambda: self.set_charged_mhr(table, index))
+        # 将菜单添加到菜单中
+        menu.addAction(action_set_tbc)
+        # 在菜单位置显示上下文菜单
+        menu.exec_(table.viewport().mapToGlobal(pos))
+
+    def set_charged_mhr(self, table: QtWidgets.QTableView, index: QtCore.QModelIndex):
+        model: QtGui.QStandardItemModel = table.model()
+        nrc_id = model.item(index.row(), self.trade_fields.index('nrc_id')).text()
+        dialog = NrcMhrTbcInputDialog(nrc_id)
+        dialog.exec()
 
 
 class NrcReportDetailWin(QtWidgets.QWidget):
@@ -959,3 +1031,37 @@ class NrcReportDetailWin(QtWidgets.QWidget):
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         else:
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Interactive)
+
+
+class NrcMhrTbcInputDialog(QtWidgets.QDialog):
+    def __init__(self, nrc_id, parent=None):
+        super(NrcMhrTbcInputDialog, self).__init__(parent)
+        self.nrc_id = nrc_id
+        self.db = DatabaseManager()
+        self.query = QtSql.QSqlQuery(self.db.con)
+
+        self.ui = Ui_MhNrcTbcInputDialog()
+        self.ui.setupUi(self)
+        self.ui.lineEditNrcId.setText(nrc_id)
+        sql = "SELECT charged,agreed,remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
+        self.query.prepare(sql)
+        self.query.bindValue(":nrc_id", self.nrc_id)
+        if self.query.exec() and self.query.first():
+            self.ui.doubleSpinBoxCharged.setValue(float(self.query.value('charged')))
+            self.ui.doubleSpinBoxAgreed.setValue(float(self.query.value('agreed')))
+            self.ui.plainTextEditRemark.setPlainText(self.query.value('remark'))
+
+    def on_buttonBox_accepted(self):
+        charged = self.ui.doubleSpinBoxCharged.value()
+        agreed = self.ui.doubleSpinBoxAgreed.value()
+        remark = self.ui.plainTextEditRemark.toPlainText()
+        sql = "REPLACE INTO MhNrcToBeCharged VALUES (:nrc_id,:charged,:agreed,,:remark)"
+        self.query.prepare(sql)
+        self.query.bindValue(":nrc_id", self.nrc_id)
+        self.query.bindValue(":charged", str(charged))
+        self.query.bindValue(":agreed", str(agreed))
+        self.query.bindValue(":remark", remark)
+        if not self.query.exec():
+            QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+        else:
+            QtWidgets.QMessageBox.information(self, 'Info.', 'Save OK.')

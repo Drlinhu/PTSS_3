@@ -212,15 +212,24 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
                                                   ON UPDATE CASCADE,
    ref     TEXT
 );""",
-             "ProcedureLabels":"""CREATE TABLE IF NOT EXISTS ProcedureLabels (
+             "ProcedureLabels": """CREATE TABLE IF NOT EXISTS ProcedureLabels (
     proc_id     TEXT PRIMARY KEY
                      REFERENCES Procedure (proc_id) ON DELETE CASCADE
                                                     ON UPDATE CASCADE,
     location    TEXT DEFAULT "",
+    action_type TEXT DEFAULT "",
     access_desc TEXT DEFAULT "",
     marker      TEXT DEFAULT "",
     remark      TEXT DEFAULT ""
 );""",
+             "MhNrcToBeCharged": """CREATE TABLE IF NOT EXISTS MhNrcToBeCharged (
+    nrc_id  TEXT PRIMARY KEY
+                 NOT NULL,
+    charged REAL DEFAULT (0.0),
+    agreed  REAL DEFAULT (0.0),
+    remark  TEXT DEFAULT ""
+);
+"""
              }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

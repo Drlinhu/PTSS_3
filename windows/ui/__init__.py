@@ -12,3 +12,4 @@ from .ui_registernrcdailydetailform import Ui_RegisterNrcDailyDetailForm
 from .ui_registerprojectidform import Ui_RegisterProjectIdForm
 from .ui_newregprojinputdialog import Ui_NewRegProjInputDialog
 from .ui_generalinputdialog import Ui_GeneralInputDialog
+from .ui_mhnrctbcinputdialog import Ui_MhNrcTbcInputDialog

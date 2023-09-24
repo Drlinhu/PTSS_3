@@ -314,12 +314,19 @@ class NrcStandardItemWin(QtWidgets.QWidget):
         for file_path in file_paths:
             with open(file_path, 'rb') as f:
                 image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+                # 读取图片数据并创建 QImage 对象
+                q_image = QtGui.QImage.fromData(image_data)
+                # 将 QImage 对象以指定格式和压缩参数保存为字节数据
+                byte_array = QtCore.QByteArray()
+                buffer = QtCore.QBuffer(byte_array)
+                buffer.open(QtCore.QIODevice.WriteOnly)
+                q_image.save(buffer, "JPEG", 50)  # 保存为 jpeg 格式的字节数据
             path = Path(file_path)
             for index in sel_idxes:
                 self.query.bindValue(':id', None)
                 self.query.bindValue(':item_no', index.data())
                 self.query.bindValue(':name', path.name)
-                self.query.bindValue(':image', image_data)
+                self.query.bindValue(':image', byte_array)
                 if not self.query.exec():
                     self.db.con.rollback()
                     QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
