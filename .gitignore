@@ -5,6 +5,7 @@ out
 gen
 
 # user templater file
-/venv/
+/dist/
 /default.db
-default.db
+/main.spec
+/build/main/
