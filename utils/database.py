@@ -228,8 +228,12 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     charged REAL DEFAULT (0.0),
     agreed  REAL DEFAULT (0.0),
     remark  TEXT DEFAULT ""
-);
-"""
+);""",
+             "HXPeople": """CREATE TABLE HXPeople (
+    id       INTEGER PRIMARY KEY,
+    engineer TEXT    DEFAULT ""
+);""",
+
              }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

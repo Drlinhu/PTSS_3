@@ -236,13 +236,13 @@ class ManhourWin(QtWidgets.QWidget):
                         absence_header[page].append(field)
                         header[field] = ''
 
-            # 提示确实的列名
+            # 提示缺失的列名
             ab_headers_info = []
             for page, header in absence_header.items():
                 if header:
                     ab_headers_info.append(f"Column {', '.join(header)} in {page} sheet")
             msg = ' and '.join(ab_headers_info) + ' not found.'
-            if msg:
+            if ab_headers_info:
                 QtWidgets.QMessageBox.warning(self, 'Warning', msg)
 
             """读取Summary页面"""

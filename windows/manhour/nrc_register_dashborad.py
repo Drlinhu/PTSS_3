@@ -161,7 +161,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
 
         condition = {}
         if self.ui.lineEditSearchNrcId.text():
-            condition['nrc_id'] = self.ui.lineEditSearchNrcId.text()
+            condition['t1.nrc_id'] = self.ui.lineEditSearchNrcId.text()
         if self.ui.lineEditSearchRefTask.text():
             condition['ref_task'] = self.ui.lineEditSearchRefTask.text()
         if self.ui.lineEditSearchDesc.text():
@@ -254,19 +254,23 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
                 data.append(temp)
             df = pd.DataFrame(data=data, columns=self.tb_header_nrc)
 
-            # 添加'Charged_Remark'列需要查询数据库
-            sql = "SELECT remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
+            # 添加Engineer和Charged_Remark列
+            sql = "SELECT engineer,remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
             self.query.prepare(sql)
+            engineers_col=[]
             charged_remark_col = []
             for i in range(df.shape[0]):
                 self.query.bindValue(":nrc_id", df.loc[i, 'Nrc_Id'])
                 if self.query.exec() and self.query.first():
+                    engineers_col.append(self.query.value('engineer'))
                     charged_remark_col.append(self.query.value('remark'))
                 else:
+                    engineers_col.append('')
                     charged_remark_col.append('')
+            df = df.assign(Engineer=engineers_col)
             df = df.assign(Charged_Remark=charged_remark_col)
 
-            # 导出的dataframe增加Trade列
+            # 增加Trade列
             trade_col = [tr] * df.shape[0]
             df_temp = df.assign(Trade=trade_col)
 
@@ -596,7 +600,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         if filter_str:
             sql = f"""SELECT t1.nrc_id,ref_task,description,area,status,total,t1.remark,
                              min(report_date) as added_on,max(report_date) as latest_date,
-                             COALESCE (t2.charged,0.0) AS charged,COALESCE(t2.agreed,0.0) AS agreed
+                             COALESCE (t2.charged,-0.01) AS charged,COALESCE(t2.agreed,-0.01) AS agreed
                       FROM MhNrcReport AS t1
                       LEFT JOIN MhNrcToBeCharged AS t2 ON t1.nrc_id=t2.nrc_id
                       WHERE register=:register AND SUBSTR(t1.nrc_id,1,2)=:proj_id AND trade=:trade 
@@ -606,13 +610,14 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         else:
             sql = f"""SELECT t1.nrc_id,ref_task,description,area,status,total,t1.remark,
                              min(report_date) as added_on,max(report_date) as latest_date,
-                             COALESCE (t2.charged,0.0) AS charged,COALESCE(t2.agreed,0.0) AS agreed
+                             COALESCE (t2.charged,-0.01) AS charged,COALESCE(t2.agreed,-0.01) AS agreed
                       FROM MhNrcReport AS t1
                       LEFT JOIN MhNrcToBeCharged AS t2 ON t1.nrc_id=t2.nrc_id
                       WHERE register=:register AND SUBSTR(t1.nrc_id,1,2)=:proj_id AND trade=:trade 
                             AND report_date<=:report_date
                       GROUP BY t1.nrc_id
                       ORDER BY t1.nrc_id ASC"""
+
         # 获取最新日期的报告
         self.query.prepare(sql)
         self.query.bindValue(":register", self.register)
@@ -624,7 +629,6 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             temp = []
             for field in self.trade_fields:
                 if field in ['total', 'charged', 'agreed']:
-                    print(field, self.query.value(field))
                     item = QtGui.QStandardItem(f"{self.query.value(field):.2f}")
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 elif field == 'changed':
@@ -667,15 +671,24 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
     def render_table_nrc(self, table: QtWidgets.QTableView):
         model: QtGui.QStandardItemModel = table.model()
         for row in range(model.rowCount()):
-            item = model.item(row, self.trade_fields.index('changed'))
-            if float(item.text()) > 0:  # 工时增加了
+            item_charged = model.item(row, self.trade_fields.index('charged'))
+            item_agreed = model.item(row, self.trade_fields.index('agreed'))
+            item_changed = model.item(row, self.trade_fields.index('changed'))
+            if float(item_changed.text()) > 0:  # 工时增加了
                 color = QtGui.QColor(250, 128, 114)  # 红色
-            elif float(item.text()) < 0:
+            elif float(item_changed.text()) < 0:
                 color = QtGui.QColor(0, 250, 154)  # 绿色
             else:
                 color = QtGui.QColor(255, 255, 255)  # 白色
             brush = QtGui.QBrush(color)
-            item.setBackground(brush)
+            item_changed.setBackground(brush)
+
+            for item in [item_charged, item_agreed]:
+                if float(item.text()) < 0:
+                    if item.background().color() == QtGui.QColor(0, 0, 0):
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+                    else:
+                        item.setForeground(item.background())
 
     def update_tr_qty_mhr(self, tr: str, table: QtWidgets.QTableView):
         mhr = 0.0
@@ -1065,25 +1078,48 @@ class NrcMhrTbcInputDialog(QtWidgets.QDialog):
         self.ui = Ui_MhNrcTbcInputDialog()
         self.ui.setupUi(self)
         self.ui.lineEditNrcId.setText(nrc_id)
-        sql = "SELECT charged,agreed,remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
+
+        # 设置engineer下拉选项菜单
+        self.ui.cbbEngineer.addItem('')
+        sql = "SELECT engineer FROM HXPeople ORDER BY engineer"
+        self.query.exec(sql)
+        while self.query.next():
+            self.ui.cbbEngineer.addItem(self.query.value('engineer'))
+
+        # 设置各个控件值
+        sql = "SELECT charged,agreed,engineer,remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
         self.query.prepare(sql)
         self.query.bindValue(":nrc_id", self.nrc_id)
         if self.query.exec() and self.query.first():
             self.ui.doubleSpinBoxCharged.setValue(float(self.query.value('charged')))
             self.ui.doubleSpinBoxAgreed.setValue(float(self.query.value('agreed')))
+            self.ui.cbbEngineer.setCurrentText(self.query.value('engineer'))
             self.ui.plainTextEditRemark.setPlainText(self.query.value('remark'))
+        else:
+            self.ui.doubleSpinBoxCharged.setValue(-0.01)
+            self.ui.doubleSpinBoxAgreed.setValue(-0.01)
 
     def on_buttonBox_accepted(self):
         charged = self.ui.doubleSpinBoxCharged.value()
         agreed = self.ui.doubleSpinBoxAgreed.value()
+        engineer = self.ui.cbbEngineer.currentText()
         remark = self.ui.plainTextEditRemark.toPlainText()
-        sql = "REPLACE INTO MhNrcToBeCharged VALUES (:nrc_id,:charged,:agreed,:remark)"
+        sql = "REPLACE INTO MhNrcToBeCharged VALUES (:nrc_id,:charged,:agreed,:engineer,:remark)"
         self.query.prepare(sql)
         self.query.bindValue(":nrc_id", self.nrc_id)
         self.query.bindValue(":charged", str(charged))
         self.query.bindValue(":agreed", str(agreed))
+        self.query.bindValue(":engineer", engineer)
         self.query.bindValue(":remark", remark)
         if not self.query.exec():
             QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
         else:
             QtWidgets.QMessageBox.information(self, 'Info.', 'Save OK.')
+
+        sql = """INSERT INTO  HXPeople (id,engineer) 
+                 SELECT :id,:engineer
+                 WHERE NOT EXISTS (SELECT * FROM HXPeople WHERE engineer=:engineer)"""
+        self.query.prepare(sql)
+        self.query.bindValue(":id", None)
+        self.query.bindValue(":engineer", engineer)
+        self.query.exec()
