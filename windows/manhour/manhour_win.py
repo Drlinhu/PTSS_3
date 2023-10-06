@@ -1,8 +1,10 @@
 import os, re
+
+import pdfplumber
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings, QDate
 
 from ..ui.ui_manhourform import Ui_ManHourForm
 from ..ui import Ui_GeneralInputDialog
@@ -12,6 +14,7 @@ from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
 from .nrc_manhour_trend import NrcManhourTrendWin
 from .nrc_standardItem_win import NrcStandardItemWin
+from utils import is_numeric
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 from utils.setting import get_section_options, get_section_allKeys
@@ -116,6 +119,109 @@ class ManhourWin(QtWidgets.QWidget):
     def on_toolButtonNrcStandard_clicked(self):
         self.nrc_standardItem_win = NrcStandardItemWin()
         self.nrc_standardItem_win.show()
+
+    @pyqtSlot()
+    def on_toolButtonNrcSubtaskImport_clicked(self):
+        try:
+            pdf_file, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open PDF File', '', filter='PDF Files (*.pdf)')
+            if not pdf_file:
+                return
+
+            # 读取.ini文件中的值
+            settings = QSettings("config.ini", QSettings.IniFormat)
+            p_run_date = settings.value("subtask_import/p_run_date")
+            p_base_info = settings.value("subtask_import/p_base_info")
+            p_subtask = settings.value("subtask_import/p_subtask")
+
+            class_ = 'NRC'
+            section_mark = ' '.join(['-'] * 14)
+
+            register = ''
+            proj_id = ''
+            run_date = ''
+
+            items = []  # 记录每个NRC SUBTASK清单
+            with pdfplumber.open(pdf_file) as pdf:
+                collated = []
+                # 获取register和proj_id信息
+                first_page = pdf.pages[0]
+                info_page = first_page.crop((0, 0, first_page.width, 145))
+                for line in info_page.extract_text().splitlines():
+                    # PROJECT : XJ CUSTOMER : CX A/C TYPE : 777 A/C REGN : B-KPV CHECK TYPE : 2C
+                    r = re.match(p_base_info, line)
+                    if r:
+                        register = r.group('register')
+                        proj_id = r.group('proj_id')
+
+                    r = re.match(p_run_date, line)
+                    if r:
+                        temp = r.group('run_date').split('/')
+                        run_date = QDate(int(temp[2]), int(temp[0]), int(temp[1])).toString('yyyy-MM-dd')
+
+                if not register or not proj_id or not run_date:
+                    QtWidgets.QMessageBox.critical(self, 'Error', 'No Register, Project ID or Report Date identified.')
+                    return
+
+                for i, page in enumerate(pdf.pages):
+                    crop_page = page.crop((0, 145, page.width, page.height))
+                    for line in crop_page.extract_text().splitlines():
+                        if line == section_mark:
+                            if is_numeric(collated[0]):
+                                items.append(collated[1:])
+                            else:
+                                items.append(collated)
+                            collated = []
+                        else:
+                            collated.append(line)
+
+            # register,proj_id,class,sheet,item_no,description,jsn,mhr,trade,report_date
+            # front_page_mhr
+            columns = (
+                'register', 'proj_id', 'class', 'sheet', 'item_no', 'description', 'jsn', 'mhr', 'trade', 'report_date')
+            subtasks = []
+            for item in items:
+                if len(item) > 3:
+                    # 1C 1 REMOVE BODY FAIRING 191SL &192SR 0.0
+                    for line in item:
+                        subtask = dict.fromkeys(columns)
+                        subtask['register'] = register
+                        subtask['trade'] = ''
+                        first_line = item[0].split()
+                        subtask['proj_id'] = first_line[0][:2]
+                        subtask['class'] = class_
+                        subtask['jsn'] = first_line[-3]
+                        subtask['report_date'] = run_date
+                        r = re.match(p_subtask, line)
+                        if r:
+                            subtask['sheet'] = r.group('sheet')
+                            subtask['item_no'] = r.group('item_no')
+                            subtask['description'] = r.group('description')
+                            subtask['mhr'] = r.group('mhr')
+                            subtasks.append(subtask)
+            # 保存到数据库中
+            self.db.con.transaction()
+            sql = '''REPLACE INTO MhSubtask
+                     VALUES (:register,:proj_id,:class,:sheet,:item_no,:description,:jsn,:mhr,:trade,:report_date)'''
+            self.query.prepare(sql)
+            for subtask in subtasks:
+                self.query.bindValue(":register", subtask['register'])
+                self.query.bindValue(":proj_id", subtask['proj_id'])
+                self.query.bindValue(":class", subtask['class'])
+                self.query.bindValue(":sheet", subtask['sheet'])
+                self.query.bindValue(":item_no", subtask['item_no'])
+                self.query.bindValue(":description", subtask['description'])
+                self.query.bindValue(":jsn", subtask['jsn'])
+                self.query.bindValue(":mhr", subtask['mhr'])
+                self.query.bindValue(":trade", subtask['trade'])
+                self.query.bindValue(":report_date", subtask['report_date'])
+                if not self.query.exec():
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                    self.db.con.transaction()
+                    return
+            self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Info.', 'Import Successfully.')
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, 'Error', e)
 
     @pyqtSlot()
     def on_toolButtonRtnQuotationAssistant_clicked(self):  # TODO

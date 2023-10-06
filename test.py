@@ -1,3 +1,5 @@
-from utils.setting import *
-ini_file = "mhr_import.ini"
-print(get_section_allKeys(ini_file,'finalized_header'))
+import pandas as pd
+
+file = 'sample/B-KPV NRC LIST (2 Oct).xls'
+xlsx = pd.ExcelFile(file)
+print(xlsx)

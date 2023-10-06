@@ -5,7 +5,7 @@ import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSlot, QDate, QDateTime
 
-from ..ui import Ui_RegisterNrcDailyDetailForm, Ui_NrcReportDetailForm, Ui_MhNrcTbcInputDialog
+from ..ui import Ui_RegisterNrcDailyDetailForm, Ui_NrcReportDetailForm, Ui_MhNrcTbcInputDialog, Ui_SetNrcLabelDialog
 from .mh_finalized_detail_win import ManhourFinalizedWin
 from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .cx_remark_dialog import CxRemarkInputDialog
@@ -257,7 +257,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             # 添加Engineer和Charged_Remark列
             sql = "SELECT engineer,remark FROM MhNrcToBeCharged WHERE nrc_id=:nrc_id"
             self.query.prepare(sql)
-            engineers_col=[]
+            engineers_col = []
             charged_remark_col = []
             for i in range(df.shape[0]):
                 self.query.bindValue(":nrc_id", df.loc[i, 'Nrc_Id'])
@@ -744,9 +744,12 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         menu = QtWidgets.QMenu(self)
         # 创建操作
         action_set_tbc = QtWidgets.QAction("Set charged mhr", self)
+        action_set_label = QtWidgets.QAction("Set nrc label", self)
         action_set_tbc.triggered.connect(lambda: self.set_charged_mhr(table, index))
+        action_set_label.triggered.connect(lambda: self.set_nrc_label(table))
         # 将菜单添加到菜单中
         menu.addAction(action_set_tbc)
+        menu.addAction(action_set_label)
         # 在菜单位置显示上下文菜单
         menu.exec_(table.viewport().mapToGlobal(pos))
 
@@ -756,6 +759,13 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
         dialog = NrcMhrTbcInputDialog(nrc_id)
         dialog.exec()
         self.on_btnSearch_clicked()
+
+    def set_nrc_label(self, table: QtWidgets.QTableView):
+        sel_model: QtCore.QItemSelectionModel = table.selectionModel()
+        sel_idxes = sel_model.selectedRows(self.trade_fields.index('nrc_id'))
+        nrc_ids = [idx.data() for idx in sel_idxes]
+        dialog = SetNrcLabelDialog(nrc_ids)
+        dialog.exec()
 
 
 class NrcReportDetailWin(QtWidgets.QWidget):
@@ -1123,3 +1133,92 @@ class NrcMhrTbcInputDialog(QtWidgets.QDialog):
         self.query.bindValue(":id", None)
         self.query.bindValue(":engineer", engineer)
         self.query.exec()
+
+
+class SetNrcLabelDialog(QtWidgets.QDialog):
+    def __init__(self, nrc_ids: list, parent=None):
+        super().__init__(parent)
+        self.nrc_ids = nrc_ids
+        self.db = DatabaseManager()
+        self.query = QtSql.QSqlQuery(self.db.con)
+
+        self.ui = Ui_SetNrcLabelDialog()
+        self.ui.setupUi(self)
+
+        self.init_options_tableview()
+        self.init_selected_tableview()
+
+    @pyqtSlot()
+    def on_btnMoveRight_clicked(self):
+        sel_model = self.ui.tbvOptions.selectionModel()
+        sel_idxes = sel_model.selectedRows(0)
+
+        tbvSelected_model = self.ui.tbvSelected.model()
+        for idx in sel_idxes:
+            temp = [tbvSelected_model.index(i, 0).data() for i in range(tbvSelected_model.rowCount())]
+            if idx.data() not in temp:
+                row = [QtGui.QStandardItem(idx.data()), ]
+                tbvSelected_model.insertRow(tbvSelected_model.rowCount(), row)
+
+    @pyqtSlot()
+    def on_btnMoveLeft_clicked(self):
+        sel_model = self.ui.tbvSelected.selectionModel()
+        selected_rows = sel_model.selectedRows()
+        if len(selected_rows) == 0:
+            QtWidgets.QMessageBox.warning(self, "Warning", "No rows selected!")
+            return
+
+        rows_to_delete = []
+        for index in selected_rows:
+            rows_to_delete.append(index.row())
+
+        rows_to_delete.sort(reverse=True)  # Sort in reverse order to prevent index issues
+        tbvSelected_model = self.ui.tbvSelected.model()
+        for row in rows_to_delete:
+            tbvSelected_model.removeRow(row)
+
+    @pyqtSlot()
+    def on_btnSearch_clicked(self):
+        condition = {}
+        if self.ui.lineEditSearch.text():
+            condition['label'] = self.ui.lineEditSearch.text()
+
+        if condition:
+            filter_str = f'''{' AND '.join([f"{k} LIKE '%{v}%'" for k, v in condition.items()])} ORDER BY label ASC'''
+        else:
+            filter_str = ""
+
+        model: QtSql.QSqlTableModel = self.ui.tbvOptions.model()
+        model.setFilter(filter_str)
+        model.select()
+
+    def on_buttonBox_accepted(self):  # TODO
+        pass
+
+    def on_buttonBox_rejected(self):  # TODO
+        pass
+
+    def init_options_tableview(self):
+        # 创建查询模型
+        model = QtSql.QSqlTableModel(self, self.db.con)
+        model.setTable("MhNrcLabel")
+        # 创建列表视图并设置模型
+        self.ui.tbvOptions.setModel(model)
+
+        self.ui.tbvOptions.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.on_btnSearch_clicked()
+
+    def init_selected_tableview(self):
+        # 创建查询模型
+        model = QtGui.QStandardItemModel()
+
+        # 创建列表视图并设置模型
+        self.ui.tbvSelected.setModel(model)
+        self.ui.tbvSelected.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+
+    def keyPressEvent(self, event):
+        # 在父控件中处理键盘事件
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        elif event.key() == Qt.Key_Return:
+            pass

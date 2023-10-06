@@ -13,3 +13,4 @@ from .ui_registerprojectidform import Ui_RegisterProjectIdForm
 from .ui_newregprojinputdialog import Ui_NewRegProjInputDialog
 from .ui_generalinputdialog import Ui_GeneralInputDialog
 from .ui_mhnrctbcinputdialog import Ui_MhNrcTbcInputDialog
+from .ui_setnrclabeldialog import Ui_SetNrcLabelDialog

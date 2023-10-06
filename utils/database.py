@@ -229,11 +229,20 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     agreed  REAL DEFAULT (0.0),
     remark  TEXT DEFAULT ""
 );""",
-             "HXPeople": """CREATE TABLE HXPeople (
+             "HXPeople": """CREATE TABLE IF NOT EXISTS HXPeople (
     id       INTEGER PRIMARY KEY,
     engineer TEXT    DEFAULT ""
 );""",
-
+             "MhNrcLabel": """CREATE TABLE IF NOT EXISTS MhNrcItemLabel (
+    id     INTEGER PRIMARY KEY,
+    nrc_id TEXT    DEFAULT "",
+    label  TEXT    DEFAULT ""
+);""",
+             "MhLabel": """CREATE TABLE IF NOT EXISTS MhNrcLabel (
+    label TEXT DEFAULT ""
+             PRIMARY KEY
+);
+"""
              }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
