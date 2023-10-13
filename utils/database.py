@@ -178,8 +178,15 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
    remark  TEXT DEFAULT ""
 );""",
              "Procedure": """CREATE TABLE IF NOT EXISTS Procedure (
-   proc_id     TEXT PRIMARY KEY,
-   description TEXT DEFAULT ""
+    proc_id     TEXT PRIMARY KEY
+                     REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                    ON UPDATE CASCADE,
+    craft_code  TEXT DEFAULT "",
+    description TEXT DEFAULT "",
+    location    TEXT DEFAULT "",
+    [action]    TEXT DEFAULT "",
+    access      TEXT DEFAULT "",
+    remark      TEXT DEFAULT ""
 );
 """,
              "ProcedureImage": """CREATE TABLE IF NOT EXISTS ProcedureImage (
@@ -210,17 +217,8 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
    id      INTEGER PRIMARY KEY,
    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
                                                   ON UPDATE CASCADE,
-   ref     TEXT
-);""",
-             "ProcedureLabels": """CREATE TABLE IF NOT EXISTS ProcedureLabels (
-    proc_id     TEXT PRIMARY KEY
-                     REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                    ON UPDATE CASCADE,
-    location    TEXT DEFAULT "",
-    action_type TEXT DEFAULT "",
-    access_desc TEXT DEFAULT "",
-    marker      TEXT DEFAULT "",
-    remark      TEXT DEFAULT ""
+   ref      TEXT    DEFAULT "",
+   type     TEXT    DEFAULT ""
 );""",
              "MhNrcToBeCharged": """CREATE TABLE IF NOT EXISTS MhNrcToBeCharged (
     nrc_id  TEXT PRIMARY KEY
@@ -241,8 +239,15 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
              "MhLabel": """CREATE TABLE IF NOT EXISTS MhNrcLabel (
     label TEXT DEFAULT ""
              PRIMARY KEY
-);
-"""
+);""",
+             "ProcedureMhr": """CREATE TABLE IF NOT EXISTS ProcedureMhr (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    skill   REAL    DEFAULT (0.0),
+    unskill REAL    DEFAULT (0.0),
+    remark  TEXT    DEFAULT ""
+);"""
              }
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (

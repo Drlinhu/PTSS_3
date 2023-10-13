@@ -2,19 +2,27 @@ import os
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings
 
 from ..ui.ui_procedureform import Ui_ProcedureForm
 from ..image_viewer import ImageViewer
 from utils.database import DatabaseManager
 
+settings = QSettings("config.ini", QSettings.IniFormat)
+
 
 class ProcedureWin(QtWidgets.QWidget):
     tb_header_proc = {'proc_id': 'Procedure_ID',
-                      'description': 'Description', }
+                      'craft_code': 'CRAFT_CODE',
+                      'description': 'Description',
+                      'location': 'Location',
+                      'action': 'Action',
+                      'access': 'Access',
+                      'remark': 'Remark', }
     tb_header_ref = {'id': 'ID',
                      'proc_id': 'Procedure_ID',
-                     'ref': 'Reference', }
+                     'ref': 'Reference',
+                     'type': 'Type', }
     tb_header_panel = {'id': 'ID',
                        'proc_id': 'Procedure_ID',
                        'panel': 'Panel', }
@@ -34,22 +42,38 @@ class ProcedureWin(QtWidgets.QWidget):
         self.tb_name_panel = 'ProcedurePanel'
         self.tb_name_icw = 'ProcedureIcw'
         self.tb_name_image = 'ProcedureImage'
-        self.save_model = 'NEW'
-        self.header_from_excel = list(self.tb_header_proc.values()) + ['Location', 'Access_Desc', 'Marker', 'CX_Remark']
+        self.tb_name_label = 'ProcedureLabel'
+        self.save_mode = 'NEW'
+        self.header_from_excel = list(self.tb_header_proc.values())
         self.new_ims = []
 
         self.ui = Ui_ProcedureForm()
         self.ui.setupUi(self)
+        self.ui.cbbLocation.addItems(sorted([''] + settings.value("options/location")))
+        self.ui.cbbActionType.addItems(sorted([''] + settings.value("options/action")))
 
         self.init_proc_table()  # 初始化表格
         self.init_ref_table()
         self.init_panel_table()
         self.init_icw_table()
 
-    def on_tbvProc_doubleClicked(self, idx: QtCore.QModelIndex):
-        self.save_model = 'MODIFY'
+        # 设置槽函数
+        self.ui.lineEditSearchProcId.returnPressed.connect(self.on_btnSearchProc_clicked)
+        self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearchProc_clicked)
+
+    def on_tbvProc_clicked(self, idx: QtCore.QModelIndex):  # TODO
+        self.set_button_enable(False)
+        model = self.ui.tbvProc.model()
+        self.ui.lineEditProcId.setText(model.index(idx.row(), self.field_num_proc['proc_id']).data())
+        self.ui.plainTextEditDesc.setPlainText(model.index(idx.row(), self.field_num_proc['description']).data())
+        self.ui.cbbLocation.setCurrentText(model.index(idx.row(), self.field_num_proc['location']).data())
+        self.ui.cbbActionType.setCurrentText(model.index(idx.row(), self.field_num_proc['action']).data())
+
+    def on_tbvProc_doubleClicked(self, idx: QtCore.QModelIndex):  # TODO
+        self.save_mode = 'MODIFY'
         self.ui.plainTextEditDesc.setReadOnly(False)
         self.set_button_enable(True)
+
         model = self.ui.tbvProc.model()
         self.ui.lineEditProcId.setText(model.index(idx.row(), self.field_num_proc['proc_id']).data())
         self.ui.plainTextEditDesc.setPlainText(model.index(idx.row(), self.field_num_proc['description']).data())
@@ -72,43 +96,47 @@ class ProcedureWin(QtWidgets.QWidget):
         if not read_path:
             return
 
+        # 读取数据为dataframe
         df = pd.read_excel(read_path, nrows=0)
-        # 验证数据字段完整性
-        for x in self.header_from_excel:
-            if x not in df.columns:
-                QtWidgets.QMessageBox.critical(self, 'Error', f'Column `{x}` not found in excel!')
-                return
+        header_proc_revert = {v: k for k, v in self.tb_header_proc.items()}
+        columns = [header_proc_revert[x] for x in df.columns]  # 读取的excel满足数据库表的列
+
+        if not columns:
+            QtWidgets.QMessageBox.critical(self, 'Error', 'No needed data found in excel.')
 
         # 读取并保存数据
         converters = {'Procedure_ID': lambda y: str(y).strip(),
                       'Description': lambda y: str(y).strip(),
                       'Location': lambda y: str(y).strip(),
-                      'Access_Desc': lambda y: str(y).strip(),
-                      'Marker': lambda y: str(y).strip(),
-                      'CX_Remark': lambda y: str(y).strip(),
+                      'Action': lambda y: str(y).strip(),
+                      'Access': lambda y: str(y).strip(),
+                      'Remark': lambda y: str(y).strip(),
                       }
         df = pd.read_excel(read_path, keep_default_na=False, converters=converters)
 
-        model = self.ui.tbvProc.model()
         self.db.con.transaction()
 
         # 保存proc_id和description
         sql = f"""INSERT INTO {self.tb_name_proc}
                   VALUES ({','.join([f':{field}' for field in self.tb_header_proc.keys()])})
-                  ON CONFLICT (proc_id) DO UPDATE SET
-                                      {','.join([f"{field}=CASE WHEN {field}=:{field} THEN {field} ELSE :{field} END"
-                                                 for field in self.tb_header_proc.keys()])}"""
+                  ON CONFLICT (proc_id) 
+                  DO UPDATE SET {','.join([f"{field}=CASE WHEN {field}=:{field} THEN {field} ELSE :{field} END"
+                                           for field in columns])}"""
         self.query.prepare(sql)
         for i in range(df.shape[0]):
             for field, column in self.field_num_proc.items():
-                header = self.tb_header_proc[field]
-                self.query.bindValue(f":{field}", df.loc[i, header])
+                if field in columns:
+                    header = self.tb_header_proc[field]
+                    self.query.bindValue(f":{field}", df.loc[i, header])
+                else:
+                    self.query.bindValue(f":{field}", '')
             if not self.query.exec():
                 self.db.con.rollback()
                 QtWidgets.QMessageBox.critical(self, 'Error', f'Failed\n{self.query.lastError().text()}')
                 return
         self.db.con.commit()
         QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
+        self.on_btnSearchProc_clicked()
 
     @pyqtSlot()
     def on_btnExportProc_clicked(self):
@@ -127,7 +155,6 @@ class ProcedureWin(QtWidgets.QWidget):
             row_data = []
             for j in range(model.columnCount()):
                 row_data.append(model.data(model.index(i, j), Qt.DisplayRole))
-            row_data += ['' for _ in range(len(self.header_from_excel) - model.columnCount())]
             data.append(row_data)
 
         df = pd.DataFrame(data=data, columns=self.header_from_excel)
@@ -257,6 +284,14 @@ class ProcedureWin(QtWidgets.QWidget):
         pass
 
     @pyqtSlot()
+    def on_btnAddImageRef_clicked(self):  # TODO
+        pass
+
+    @pyqtSlot()
+    def on_btnImageRef_clicked(self):  # TODO
+        pass
+
+    @pyqtSlot()
     def on_btnNewPanel_clicked(self):  # TODO
         pass
 
@@ -281,7 +316,7 @@ class ProcedureWin(QtWidgets.QWidget):
             return
         self.db.con.transaction()  # 启动数据库操作事务
         # 保存基本信息
-        if self.save_model == 'NEW':
+        if self.save_mode == 'NEW':
             sql = f"INSERT INTO {self.tb_name_proc} VALUES (:proc_id,:description)"
         else:
             sql = f"REPLACE INTO {self.tb_name_proc} VALUES (:proc_id,:description)"
@@ -315,7 +350,7 @@ class ProcedureWin(QtWidgets.QWidget):
         QtWidgets.QMessageBox.information(self, 'Information', 'Saved.')
         self.on_btnSearchProc_clicked()
         # 复位编辑相关控件状态
-        self.save_model = 'NEW'
+        self.save_mode = 'NEW'
         self.new_ims = []
         self.ui.lineEditProcId.setReadOnly(True)
         self.ui.plainTextEditDesc.setReadOnly(True)
@@ -348,12 +383,16 @@ class ProcedureWin(QtWidgets.QWidget):
         self.field_num_proc = self.db.get_field_num(model)  # 获取字段名和序号
         for field, column in self.field_num_proc.items():  # 设置字段显示名
             model.setHeaderData(column, Qt.Horizontal, self.tb_header_proc[field])
+
         # 设置表格视图属性
         for field, column in self.field_num_proc.items():  # 设置表格列宽度默认行为
             if field in ['description']:
                 table.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
             else:
                 table.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
+            if field not in ['proc_id', 'craft_code', 'description', 'location', 'action']:
+                self.ui.tbvProc.hideColumn(column)
+
         # 设置表格视图的水平标题右击弹出菜单
         table.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         table.horizontalHeader().customContextMenuRequested.connect(self.show_table_header_menu)
@@ -363,6 +402,7 @@ class ProcedureWin(QtWidgets.QWidget):
     def init_ref_table(self):
         table = self.ui.tbvReference
         table.horizontalHeader().setVisible(False)
+
         # 创建表格模型(不可编辑, 默认可排序)
         model = QtSql.QSqlTableModel(self, self.db.con)
         model.setTable(self.tb_name_ref)
@@ -378,13 +418,14 @@ class ProcedureWin(QtWidgets.QWidget):
         self.field_num_ref = self.db.get_field_num(model)  # 获取字段名和序号
         for field, column in self.field_num_ref.items():  # 设置字段显示名
             model.setHeaderData(column, Qt.Horizontal, self.tb_header_ref[field])
+
         # 设置表格视图属性
         for field, column in self.field_num_ref.items():  # 设置表格列宽度默认行为
             if field in ['ref']:
                 table.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
             else:
                 table.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
-            if field in ['id', 'proc_id']:
+            if field not in ['ref']:
                 table.hideColumn(column)
 
     def init_panel_table(self):
@@ -466,9 +507,13 @@ class ProcedureWin(QtWidgets.QWidget):
     def set_button_enable(self, enable):
         self.ui.btnNewRef.setEnabled(enable)
         self.ui.btnDeleteRef.setEnabled(enable)
+        self.ui.btnAddImageRef.setEnabled(enable)
+        self.ui.btnImageRef.setEnabled(enable)
         self.ui.btnNewPanel.setEnabled(enable)
         self.ui.btnDeletePanel.setEnabled(enable)
         self.ui.btnNewIcw.setEnabled(enable)
         self.ui.btnDeleteIcw.setEnabled(enable)
         self.ui.btnAddNewImage.setEnabled(enable)
         self.ui.btnSave.setEnabled(enable)
+        self.ui.btnNewLabel.setEnabled(enable)
+        self.ui.btnDeleteLabel.setEnabled(enable)

@@ -18,16 +18,26 @@ class NrcSubtaskTempWin(QtWidgets.QWidget):
                             'jsn': 'Jsn',
                             'mhr': 'Mhr',
                             'trade': 'Trade',
+                            'report_date': 'Report_Date',
                             }
 
-    def __init__(self, nrc_id, parent=None, ):
+    def __init__(self, nrc_id, parent=None, table_name="MhSubtaskTemp"):
         super(NrcSubtaskTempWin, self).__init__(parent)
-        self.table_name = "MhSubtaskTemp"
+        self.table_name = table_name
         self.db = DatabaseManager()
         self.query = self.db.con
         self.nrc_id = nrc_id
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
-        self.filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' ORDER BY item_no ASC"""
+        if self.table_name == "MhSubtask":
+            self.table_header_mapping['report_date']="Report_Date"
+            self.filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date=
+                                        (SELECT MAX(report_date) 
+                                        FROM {self.table_name} 
+                                        WHERE proj_id='{proj_id}' AND jsn='{jsn}') 
+                                  ORDER BY item_no ASC"""
+        else:
+            self.table_header_mapping.pop('report_date')
+            self.filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' ORDER BY item_no ASC"""
 
         self.ui = Ui_SubtaskForm()
         self.ui.setupUi(self)

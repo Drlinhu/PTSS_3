@@ -14,7 +14,7 @@ from .nrc_subtask_temp_win import NrcSubtaskTempWin
 from .nrc_report_assistant_win import NrcReportAssistantWin
 from .nrc_manhour_trend import NrcManhourTrendWin
 from .nrc_standardItem_win import NrcStandardItemWin
-from utils import is_numeric
+from utils import is_numeric, is_valid_date
 from utils.database import DatabaseManager
 from utils.nrc_corpus import *
 from utils.setting import get_section_options, get_section_allKeys
@@ -43,6 +43,31 @@ TABLE_HEADER_MAPPING = {'mh_id': 'MH_Id',
                         }
 
 ini_file = "mhr_import.ini"
+
+
+def get_mode2_subtasks(item: list, p):
+    subtasks = []
+    collated = []  # 满足格式要求的单个subtask
+    temp = []  # 记录属于同个subtask的行,待处理
+    for i, line in enumerate(item):
+        if re.match(p, line) and temp:
+            collated.append(temp)
+            temp = [line]
+        else:
+            temp.append(line)
+        if i == len(item) - 1 and temp:
+            collated.append(temp)
+    for record in collated:
+        r = re.match(p, record[0])
+        sheet = ''
+        item_no = r.group('item_no')
+        desc = r.group('desc')
+        mhr = r.group('mhr')
+        if len(record) > 1:
+            for x in record[1:]:
+                desc += f' {x}'
+        subtasks.append({'sheet': sheet, 'item_no': item_no, 'description': desc, 'mhr': mhr, 'trade': ''})
+    return subtasks
 
 
 class ManhourWin(QtWidgets.QWidget):
@@ -126,6 +151,9 @@ class ManhourWin(QtWidgets.QWidget):
             pdf_file, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open PDF File', '', filter='PDF Files (*.pdf)')
             if not pdf_file:
                 return
+            mode, _ = QtWidgets.QInputDialog.getItem(self, 'Input', 'Select Read Mode:', ['1', '2'], editable=False)
+            if not _:
+                return
 
             # 读取.ini文件中的值
             settings = QSettings("config.ini", QSettings.IniFormat)
@@ -134,7 +162,8 @@ class ManhourWin(QtWidgets.QWidget):
             p_subtask = settings.value("subtask_import/p_subtask")
 
             class_ = 'NRC'
-            section_mark = ' '.join(['-'] * 14)
+            short_line_qty = [int(x) for x in settings.value("read_pdf/short_line_qty")]
+            section_mark = [' '.join(["-" for i in range(n)]) for n in short_line_qty]
 
             register = ''
             proj_id = ''
@@ -155,50 +184,133 @@ class ManhourWin(QtWidgets.QWidget):
 
                     r = re.match(p_run_date, line)
                     if r:
-                        temp = r.group('run_date').split('/')
-                        run_date = QDate(int(temp[2]), int(temp[0]), int(temp[1])).toString('yyyy-MM-dd')
+                        run_date = is_valid_date(r.group('run_date'))
+                        if run_date:
+                            run_date = run_date.toString('yyyy-MM-dd')
 
+                print(register, proj_id, run_date)
                 if not register or not proj_id or not run_date:
                     QtWidgets.QMessageBox.critical(self, 'Error', 'No Register, Project ID or Report Date identified.')
                     return
 
-                for i, page in enumerate(pdf.pages):
-                    crop_page = page.crop((0, 145, page.width, page.height))
-                    for line in crop_page.extract_text().splitlines():
-                        if line == section_mark:
-                            if is_numeric(collated[0]):
-                                items.append(collated[1:])
-                            else:
-                                items.append(collated)
-                            collated = []
-                        else:
-                            collated.append(line)
+                # register,proj_id,class,sheet,item_no,description,jsn,mhr,trade,report_date
+                columns = (
+                    'register', 'proj_id', 'class', 'sheet', 'item_no', 'description', 'jsn', 'mhr', 'trade',
+                    'report_date')
+                subtasks = []
+                main_trade = ''
 
-            # register,proj_id,class,sheet,item_no,description,jsn,mhr,trade,report_date
-            # front_page_mhr
-            columns = (
-                'register', 'proj_id', 'class', 'sheet', 'item_no', 'description', 'jsn', 'mhr', 'trade', 'report_date')
-            subtasks = []
-            for item in items:
-                if len(item) > 3:
-                    # 1C 1 REMOVE BODY FAIRING 191SL &192SR 0.0
-                    for line in item:
-                        subtask = dict.fromkeys(columns)
-                        subtask['register'] = register
-                        subtask['trade'] = ''
-                        first_line = item[0].split()
-                        subtask['proj_id'] = first_line[0][:2]
-                        subtask['class'] = class_
-                        subtask['jsn'] = first_line[-3]
-                        subtask['report_date'] = run_date
-                        r = re.match(p_subtask, line)
-                        if r:
-                            subtask['sheet'] = r.group('sheet')
-                            subtask['item_no'] = r.group('item_no')
-                            subtask['description'] = r.group('description')
-                            subtask['mhr'] = r.group('mhr')
-                            subtasks.append(subtask)
+                sql = "SELECT total FROM MhNrcReport WHERE nrc_id=:nrc_id AND report_date=:report_date"
+                disAlignment_mhr = open('dis-alignment mhr.txt', mode='w')
+                self.query.prepare(sql)
+
+                # 收集subtask
+                if int(mode) == 1:
+                    top = None
+                    tops = [float(x) for x in settings.value("read_pdf/subtask_top")]
+                    for x in tops:
+                        crop_page = pdf.pages[0].crop((0, x, pdf.pages[0].width, pdf.pages[0].height))
+                        first_line = crop_page.extract_text().splitlines()[0]
+                        if re.match(r'[A-Z]{2}L\d{4}', first_line):
+                            top = x
+                    if not top:
+                        QtWidgets.QMessageBox.critical(self, 'Error', "Start line can't be identified")
+                        return
+
+                    for i, page in enumerate(pdf.pages):
+                        crop_page = page.crop((0, 145, page.width, page.height))
+                        for line in crop_page.extract_text().splitlines():
+                            if line in section_mark:
+                                if is_numeric(collated[0]):
+                                    items.append(collated[1:])
+                                else:
+                                    items.append(collated)
+                                collated = []
+                            else:
+                                collated.append(line)
+
+                    for item in items:
+                        if len(item) > 3:
+                            temp = item[0].split()
+                            nrc_id, main_trade = temp[0], temp[3]
+                            front_page_mhr = item[2]
+                            total_subtask_mhr = 0
+                            # 1C 1 REMOVE BODY FAIRING 191SL &192SR 0.0
+                            for line in item:
+                                subtask = dict.fromkeys(columns)
+                                subtask['register'] = register
+                                subtask['trade'] = ''
+                                first_line = item[0].split()
+                                subtask['proj_id'] = first_line[0][:2]
+                                subtask['class'] = class_
+                                subtask['jsn'] = first_line[-3]
+                                subtask['report_date'] = run_date
+                                r = re.match(p_subtask, line)
+                                if r:
+                                    subtask['sheet'] = r.group('sheet')
+                                    subtask['item_no'] = r.group('item_no')
+                                    subtask['description'] = r.group('description')
+                                    subtask['mhr'] = r.group('mhr')
+                                    total_subtask_mhr += float(subtask['mhr'])
+                                    subtasks.append(subtask)
+                            # 比较总工时与面卡工时和子工时之和大小
+                            self.query.bindValue(":nrc_id", nrc_id)
+                            self.query.bindValue(":report_date", run_date)
+                            if self.query.exec() and self.query.first():
+                                if self.query.value('total') - total_subtask_mhr > 0.5:
+                                    temp = (
+                                        nrc_id, main_trade, str(self.query.value('total')), front_page_mhr,
+                                        str(total_subtask_mhr))
+                                    disAlignment_mhr.write('\t'.join(temp) + '\n')
+                    disAlignment_mhr.close()
+
+                if int(mode) == 2:
+                    new_start_p = r'[A-Z]{3}\d{4}'
+                    for i, page in enumerate(pdf.pages):
+                        crop_page = page.crop((0, 174, page.width, page.height))
+                        for line in crop_page.extract_text().splitlines():
+                            if re.match(new_start_p, line) and collated and re.match(new_start_p, collated[0]):
+                                items.append(collated)
+                                collated = [line]
+                            else:
+                                collated.append(line)
+                    for item in items:
+                        temp = item[0].split()
+                        nrc_id, front_page_mhr = temp[0], temp[-2]
+                        p_subtask_2 = settings.value("subtask_import/p_subtask_2")
+                        for i, line in enumerate(item):
+                            if i == 0:
+                                r = re.match(r'.* (?P<trade>[A-Z]{2}) \d{2}.* (?P<jsn>L\d{3}) .*', line)
+                                jsn = r.group('jsn')
+                                main_trade = r.group('trade')
+                            if re.match(p_subtask_2, line):
+                                total_subtask_mhr = 0
+                                for subtask in get_mode2_subtasks(item[i:], p_subtask_2):
+                                    subtask['jsn'] = jsn
+                                    subtask['register'] = register
+                                    subtask['proj_id'] = proj_id
+                                    subtask['report_date'] = run_date
+                                    subtask['class'] = class_
+                                    total_subtask_mhr += float(subtask['mhr'])
+                                    subtasks.append(subtask)
+
+                                # 比较总工时与面卡工时和子工时之和大小
+                                self.query.bindValue(":nrc_id", nrc_id)
+                                self.query.bindValue(":report_date", run_date)
+                                if self.query.exec() and self.query.first():
+                                    if self.query.value('total') - total_subtask_mhr > 0.5:
+                                        temp = (
+                                            nrc_id, main_trade, str(self.query.value('total')), front_page_mhr,
+                                            str(total_subtask_mhr))
+                                        disAlignment_mhr.write('\t'.join(temp) + '\n')
+                                break
+                    disAlignment_mhr.close()
+
             # 保存到数据库中
+            if not subtasks:
+                QtWidgets.QMessageBox.critical(self, 'Error', 'Subtask not identified.')
+                return
+
             self.db.con.transaction()
             sql = '''REPLACE INTO MhSubtask
                      VALUES (:register,:proj_id,:class,:sheet,:item_no,:description,:jsn,:mhr,:trade,:report_date)'''
@@ -220,6 +332,7 @@ class ManhourWin(QtWidgets.QWidget):
                     return
             self.db.con.commit()
             QtWidgets.QMessageBox.information(self, 'Info.', 'Import Successfully.')
+            os.startfile('dis-alignment mhr.txt')
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, 'Error', e)
 
@@ -597,7 +710,8 @@ class ManhourWin(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
         mh_id = selected_rowIndexes[0].data()
-        self.subtask_win = NrcSubtaskTempWin(mh_id)
+        print(mh_id)
+        self.subtask_win = NrcSubtaskTempWin(mh_id, table_name="MhSubtask")
         self.subtask_win.show()
 
     @pyqtSlot()
