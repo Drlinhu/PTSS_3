@@ -9,27 +9,26 @@ from utils.database import DatabaseManager
 
 
 class NrcSubtaskTempWin(QtWidgets.QWidget):
-    table_header_mapping = {'register': 'Register',
-                            'proj_id': 'Proj_Id',
-                            'class': 'Class',
-                            'sheet': 'Sheet',
-                            'item_no': 'Item_No',
-                            'description': 'Description',
-                            'jsn': 'Jsn',
-                            'mhr': 'Mhr',
-                            'trade': 'Trade',
-                            'report_date': 'Report_Date',
-                            }
 
     def __init__(self, nrc_id, parent=None, table_name="MhSubtaskTemp"):
         super(NrcSubtaskTempWin, self).__init__(parent)
         self.table_name = table_name
+        self.table_header_mapping = {'register': 'Register',
+                                     'proj_id': 'Proj_Id',
+                                     'class': 'Class',
+                                     'sheet': 'Sheet',
+                                     'item_no': 'Item_No',
+                                     'description': 'Description',
+                                     'jsn': 'Jsn',
+                                     'mhr': 'Mhr',
+                                     'trade': 'Trade',
+                                     'report_date': 'Report_Date',
+                                     }
         self.db = DatabaseManager()
         self.query = self.db.con
         self.nrc_id = nrc_id
         proj_id, jsn = self.nrc_id[:2], self.nrc_id[2:6]
         if self.table_name == "MhSubtask":
-            self.table_header_mapping['report_date']="Report_Date"
             self.filter_str = f"""proj_id='{proj_id}' AND jsn='{jsn}' AND report_date=
                                         (SELECT MAX(report_date) 
                                         FROM {self.table_name} 

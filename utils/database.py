@@ -124,6 +124,7 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
    start_date TEXT DEFAULT "",
    end_date   TEXT DEFAULT "",
    status     TEXT DEFAULT "",
+   duration   INTEGER DEFAULT (0),
    PRIMARY KEY (
        register,
        proj_id
@@ -247,8 +248,13 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     skill   REAL    DEFAULT (0.0),
     unskill REAL    DEFAULT (0.0),
     remark  TEXT    DEFAULT ""
-);"""
-             }
+);""",
+             "LabelOption":"""CREATE TABLE LabelOption (
+    id     INTEGER PRIMARY KEY,
+    label  TEXT,
+    source TEXT
+);
+"""}
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
     description

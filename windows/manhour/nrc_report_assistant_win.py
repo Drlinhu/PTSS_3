@@ -384,6 +384,8 @@ class NrcReportAssistantWin(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, 'Information', 'Import successfully!')
             self.tbReport_model.select()
             self.show_report_summary()
+            del df_nrc
+            del df_subtask
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, 'Error', e)
 

@@ -458,7 +458,7 @@ class RegisterNrcDailyWin(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
         nrc_id = sel_idxes[0].data()
-        self.subtask_win = NrcSubtaskTempWin(nrc_id)
+        self.subtask_win = NrcSubtaskTempWin(nrc_id, table_name="MhSubtask")
         self.subtask_win.show()
 
     def tbv_tr_double_clicked(self, index: QtCore.QModelIndex):

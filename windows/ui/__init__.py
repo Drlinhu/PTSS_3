@@ -14,3 +14,7 @@ from .ui_newregprojinputdialog import Ui_NewRegProjInputDialog
 from .ui_generalinputdialog import Ui_GeneralInputDialog
 from .ui_mhnrctbcinputdialog import Ui_MhNrcTbcInputDialog
 from .ui_setnrclabeldialog import Ui_SetNrcLabelDialog
+from .ui_newreferencedialog import Ui_NewReferenceDialog
+from .ui_procedureform import Ui_ProcedureForm
+from .ui_newicwdialog import Ui_NewIcwDialog
+from .ui_newproclabeldialog import Ui_NewProcLabelDialog

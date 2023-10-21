@@ -17,6 +17,7 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
                            'proj_id': 'Project ID',
                            'start_date': 'Start Date',
                            'end_date': 'End Date',
+                           'duration': 'Duration',
                            'status': 'Status'}
     trend_h_header_label = ['Register', 'Project_ID', 'Report_Date', 'Total']
 
@@ -233,16 +234,18 @@ class NewRegProjInputDialog(QtWidgets.QDialog):
         proj_id = self.ui.lineEditProj.text()
         dt_start = self.ui.dateEditStart.date().toString('yyyy-MM-dd')
         dt_end = self.ui.dateEditEnd.date().toString('yyyy-MM-dd')
+        duration = self.ui.dateEditStart.date().daysTo(self.ui.dateEditEnd.date())
         status = self.ui.ccbStaus.currentText()
         if reg == "" or proj_id == "":
             QtWidgets.QMessageBox.warning(self, 'Warning', 'Please fill in all fields.')
         else:
-            sql = f"""REPLACE INTO {self.table_reg_proj} VALUES (:reg,:proj_id,:dt_start,:dt_end,:status)"""
+            sql = f"""REPLACE INTO {self.table_reg_proj} VALUES (:reg,:proj_id,:dt_start,:dt_end,:duration,:status)"""
             self.query.prepare(sql)
             self.query.bindValue(':reg', reg)
             self.query.bindValue(':proj_id', proj_id)
             self.query.bindValue(':dt_start', dt_start)
             self.query.bindValue(':dt_end', dt_end)
+            self.query.bindValue(':duration', str(duration))
             self.query.bindValue(':status', status)
             if not self.query.exec():
                 QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())

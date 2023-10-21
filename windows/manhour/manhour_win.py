@@ -588,7 +588,9 @@ class ManhourWin(QtWidgets.QWidget):
                     return
                 standard_mark = options
                 converters = {page_header['nrc']['ATA']: lambda y: str(y),
-                              page_header['nrc']['Zone']: lambda y: str(y), }
+                              page_header['nrc']['Zone']: lambda y: str(y),
+                              }
+
                 df = pd.read_excel(xlsx, sheet_name=sheet_names['nrc'], converters=converters)
                 exclude_cols = [page_header['nrc']['MH_Id'], ]  # 指定要排除的列
                 df = df.dropna(subset=exclude_cols)
