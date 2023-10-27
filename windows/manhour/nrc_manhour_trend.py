@@ -67,6 +67,20 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         cur_total = model.index(model.rowCount() - 1, 3).data()
         self.ui.lineEditTotal.setText(cur_total)
 
+    def on_tbvRegisterProjId_doubleClicked(self, index: QtCore.QModelIndex):
+        reg = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['register']).data()
+        proj_id = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['proj_id']).data()
+        start_date = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['start_date']).data()
+        end_date = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['end_date']).data()
+        status = self.ui.tbvRegisterProjId.model().index(index.row(), self.proj_field_num['status']).data()
+        dialog = RegisterProjInputDialog()
+        dialog.ui.ccbRegister.setCurrentText(reg)
+        dialog.ui.lineEditProj.setText(proj_id)
+        dialog.ui.dateEditStart.setDate(QDate(*[int(x)for x in start_date.split('-')]))
+        dialog.ui.dateEditEnd.setDate(QDate(*[int(x)for x in end_date.split('-')]))
+        dialog.ui.ccbStaus.setCurrentText(status)
+        dialog.exec()
+
     def on_tbvMhDailyTotal_doubleClicked(self, index: QtCore.QModelIndex):
         register = self.ui.tbvMhDailyTotal.model().index(index.row(), 0).data()
         proj_id = self.ui.tbvMhDailyTotal.model().index(index.row(), 1).data()
@@ -96,7 +110,7 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
 
     @pyqtSlot()
     def on_btnNew_clicked(self):
-        dialog = NewRegProjInputDialog()
+        dialog = RegisterProjInputDialog()
         dialog.exec()
         self.on_btnSearch_clicked()
 
@@ -216,7 +230,7 @@ class NrcManhourTrendWin(QtWidgets.QWidget):
         self.on_btnSearch_clicked()
 
 
-class NewRegProjInputDialog(QtWidgets.QDialog):
+class RegisterProjInputDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.table_reg_proj = "RegisterProjectId"

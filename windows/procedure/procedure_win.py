@@ -66,7 +66,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.lineEditSearchProcId.returnPressed.connect(self.on_btnSearchProc_clicked)
         self.ui.lineEditSearchDesc.returnPressed.connect(self.on_btnSearchProc_clicked)
 
-    def on_tbvProc_clicked(self, idx: QtCore.QModelIndex):  # TODO
+    def on_tbvProc_clicked(self, idx: QtCore.QModelIndex):
         self.set_button_enable(False)
         self.set_editor_edited(True)
 
@@ -96,7 +96,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvLabel.model().setFilter(f"proc_id='{proc_id}' ORDER BY id,proc_id ASC")
         self.ui.tbvLabel.model().select()
 
-    def on_tbvProc_doubleClicked(self, idx: QtCore.QModelIndex):  # TODO
+    def on_tbvProc_doubleClicked(self, idx: QtCore.QModelIndex):
         self.save_mode = 'MODIFY'
         self.set_editor_edited(False)
         self.set_button_enable(True)
@@ -222,7 +222,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.set_button_enable(True)
 
     @pyqtSlot()
-    def on_btnAddImage_clicked(self):  # TODO
+    def on_btnAddImage_clicked(self):
         sel_model = self.ui.tbvProc.selectionModel()
         sel_idxes = sel_model.selectedRows(column=self.field_num_proc['proc_id'])
         if not sel_idxes:
@@ -385,7 +385,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvReference.model().select()
 
     @pyqtSlot()
-    def on_btnAddImageRef_clicked(self):  # TODO
+    def on_btnAddImageRef_clicked(self):
         sel_model = self.ui.tbvReference.selectionModel()
         sel_idxes = sel_model.selectedRows(column=self.field_num_ref['proc_id'])
         if not sel_idxes:
@@ -468,7 +468,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvPanel.model().select()
 
     @pyqtSlot()
-    def on_btnNewIcw_clicked(self):  # TODO
+    def on_btnNewIcw_clicked(self):
         proc_id = self.ui.lineEditProcId.text()
         dialog = NewIcwDialog(proc_id)
         dialog.exec()
@@ -476,7 +476,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvIcw.model().select()
 
     @pyqtSlot()
-    def on_btnDeleteIcw_clicked(self):  # TODO
+    def on_btnDeleteIcw_clicked(self):
         proc_id = self.ui.lineEditProcId.text()
 
         # 执行删除reference程序
@@ -526,7 +526,7 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvLabel.model().select()
 
     @pyqtSlot()
-    def on_btnSave_clicked(self):  # TODO
+    def on_btnSave_clicked(self):
         proc_id = self.ui.lineEditProcId.text()
         desc = self.ui.plainTextEditDesc.toPlainText()
         craft = self.ui.cbbCraftCode.currentText()
