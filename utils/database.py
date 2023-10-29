@@ -191,12 +191,12 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
 );
 """,
              "ProcedureImage": """CREATE TABLE IF NOT EXISTS ProcedureImage (
-   id      INTEGER PRIMARY KEY,
-   proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
-                                                  ON UPDATE CASCADE,
-   name    TEXT,
-   image   BLOB,
-   sheet   INTEGER DEFAULT (1),
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    name    TEXT,
+    image   BLOB,
+    sheet   INTEGER DEFAULT (1) 
 );""",
              "ProcedureIcw": """CREATE TABLE IF NOT EXISTS ProcedureIcw (
    id      INTEGER PRIMARY KEY,
@@ -261,7 +261,15 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     name    TEXT,
     image   BLOB,
     sheet   INTEGER DEFAULT (1) 
-);"""}
+);""",
+             "ProcedureLabel":"""CREATE TABLE ProcedureLabel (
+    id      INTEGER PRIMARY KEY,
+    proc_id TEXT    DEFAULT ""
+                    REFERENCES Procedure (proc_id) ON DELETE CASCADE
+                                                   ON UPDATE CASCADE,
+    label   TEXT    DEFAULT ""
+);
+"""}
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
     description
