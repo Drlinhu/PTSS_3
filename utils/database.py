@@ -196,7 +196,7 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
                                                   ON UPDATE CASCADE,
    name    TEXT,
    image   BLOB,
-   sheet   INTEGER DEFAULT (1) 
+   sheet   INTEGER DEFAULT (1),
 );""",
              "ProcedureIcw": """CREATE TABLE IF NOT EXISTS ProcedureIcw (
    id      INTEGER PRIMARY KEY,
@@ -249,12 +249,19 @@ TABLE_SQL = {"MhFinalized": """CREATE TABLE IF NOT EXISTS MhFinalized (
     unskill REAL    DEFAULT (0.0),
     remark  TEXT    DEFAULT ""
 );""",
-             "LabelOption":"""CREATE TABLE LabelOption (
+             "LabelOption": """CREATE TABLE LabelOption (
     id     INTEGER PRIMARY KEY,
     label  TEXT,
     source TEXT
-);
-"""}
+);""",
+             "ProcRefImage": """CREATE TABLE IF NOT EXISTS ProcRefImage (
+    id      INTEGER PRIMARY KEY,
+    ref_id  TEXT,
+    ac_type TEXT    DEFAULT "",
+    name    TEXT,
+    image   BLOB,
+    sheet   INTEGER DEFAULT (1) 
+);"""}
 
 TABLE_INDEX = ["""CREATE INDEX IF NOT EXISTS mh_history_desc ON MhFinalized (
     description

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import pandas as pd
 from PyQt5 import QtWidgets, QtSql, QtCore, QtGui
-from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings
+from PyQt5.QtCore import pyqtSlot, Qt, QDateTime, QItemSelectionModel, QSettings, QDirIterator, QFileInfo
 
 from ..ui import Ui_ProcedureForm, Ui_NewReferenceDialog, Ui_NewIcwDialog, Ui_NewProcLabelDialog
 from ..image_viewer import ImageViewer
@@ -104,6 +104,28 @@ class ProcedureWin(QtWidgets.QWidget):
         model = self.ui.tbvProc.model()
         self.ui.lineEditProcId.setText(model.index(idx.row(), self.field_num_proc['proc_id']).data())
         self.ui.plainTextEditDesc.setPlainText(model.index(idx.row(), self.field_num_proc['description']).data())
+
+    def on_tbvReference_doubleClicked(self, idx: QtCore.QModelIndex):
+        model = self.ui.tbvReference.model()
+        proc_id = model.index(idx.row(), self.field_num_ref['proc_id']).data()
+        ref = model.index(idx.row(), self.field_num_ref['ref']).data()
+        ac_type = proc_id[:3]
+        sql = "SELECT * FROM ProcRefImage WHERE ref_id=:reference AND ac_type=:ac_type ORDER BY sheet ASC"
+        self.query.prepare(sql)
+        self.query.bindValue(":reference", ref)
+        self.query.bindValue(":ac_type", ac_type)
+        self.query.exec()
+
+        ims = []
+        while self.query.next():
+            ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
+        if not ims:
+            QtWidgets.QMessageBox.information(self, 'Information', 'No images')
+            return
+
+        self.image_viewer = ImageViewer(self.tb_name_image, ims)
+        self.image_viewer.show()
+        self.image_viewer.fit_image()
 
     @pyqtSlot()
     def on_btnSearchProc_clicked(self):
@@ -262,12 +284,14 @@ class ProcedureWin(QtWidgets.QWidget):
         if len(sel_idxes) != 1:
             QtWidgets.QMessageBox.information(self, 'Information', 'One row should be selected!')
             return
-        ims = []
+
         proc_id = sel_idxes[0].data()
         sql = f"SELECT id,sheet,name,image FROM {self.tb_name_image} WHERE proc_id=:proc_id ORDER BY sheet ASC"
         self.query.prepare(sql)
         self.query.bindValue(':proc_id', proc_id)
         self.query.exec()
+
+        ims = []
         while self.query.next():
             ims.append({field: self.query.value(field) for field in ['id', 'sheet', 'name', 'image']})
         if not ims:
@@ -332,6 +356,58 @@ class ProcedureWin(QtWidgets.QWidget):
         os.startfile(save_path)
 
     @pyqtSlot()
+    def on_toolButtonImportFigure_clicked(self):
+        try:
+            directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose directory")
+            if not directory:
+                return
+
+            file_paths = []
+            iterator = QDirIterator(directory, QDirIterator.Subdirectories)
+            i = 0
+            while iterator.hasNext():
+                i += 1
+                file_info = QFileInfo(iterator.next())
+                if file_info.isFile():
+                    file = file_info.filePath()
+                    if QFileInfo(file).suffix().lower() in ['jpg', 'jpeg', 'png', 'gif']:
+                        file_paths.append(file)
+            file_paths.sort()
+
+            sql = """INSERT INTO ProcRefImage
+                     VALUES (:id,:ref_id,,:ac_type,:name,:image,(
+                            SELECT IFNULL(MAX(sheet)+1,1) FROM ProcRefImage WHERE ref_id=:ref_id))"""
+            self.db.con.transaction()  # 创建事务
+            self.query.prepare(sql)
+            for file_path in file_paths:
+                with open(file_path, 'rb') as f:
+                    image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
+                    # 读取图片数据并创建 QImage 对象
+                    q_image = QtGui.QImage.fromData(image_data)
+                    # 将 QImage 对象以指定格式和压缩参数保存为字节数据
+                    byte_array = QtCore.QByteArray()
+                    buffer = QtCore.QBuffer(byte_array)
+                    buffer.open(QtCore.QIODevice.WriteOnly)
+                    q_image.save(buffer, "JPEG")  # 保存为 jpeg 格式的字节数据
+
+                # 配置sql参数数据库
+                path = Path(file_path)
+                print(path.parent.name, path.name)
+                self.query.bindValue(':id', None)
+                self.query.bindValue(':ref_id', path.parent.name)
+                self.query.bindValue(':ac_type', "777")
+                self.query.bindValue(':name', path.name)
+                self.query.bindValue(':image', byte_array)
+                if not self.query.exec():
+                    self.db.con.rollback()
+                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
+                    return
+            self.db.con.commit()
+            QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, 'Error', e)
+
+    @pyqtSlot()
     def on_toolButtonImportPanel_clicked(self):  # TODO
         pass
 
@@ -385,43 +461,8 @@ class ProcedureWin(QtWidgets.QWidget):
         self.ui.tbvReference.model().select()
 
     @pyqtSlot()
-    def on_btnAddImageRef_clicked(self):
-        sel_model = self.ui.tbvReference.selectionModel()
-        sel_idxes = sel_model.selectedRows(column=self.field_num_ref['proc_id'])
-        if not sel_idxes:
-            QtWidgets.QMessageBox.information(self, 'Information', 'No row(s) selected!')
-            return
-
-        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Image", "",
-                                                               "Image Files (*.png *.jpg *.bmp)")
-        if not file_paths:
-            return
-        sql = """INSERT INTO MhImage
-                 VALUES (:id,:mh_id,:name,:image,(SELECT IFNULL(MAX(sheet)+1,1) FROM MhImage WHERE mh_id=:mh_id))"""
-        self.db.con.transaction()  # 创建事务
-        self.query.prepare(sql)
-        for file_path in file_paths:
-            with open(file_path, 'rb') as f:
-                image_data = QtCore.QByteArray(f.read())  # 以二进制模式打开图片数据并转化为QByteArray对象
-                # 读取图片数据并创建 QImage 对象
-                q_image = QtGui.QImage.fromData(image_data)
-                # 将 QImage 对象以指定格式和压缩参数保存为字节数据
-                byte_array = QtCore.QByteArray()
-                buffer = QtCore.QBuffer(byte_array)
-                buffer.open(QtCore.QIODevice.WriteOnly)
-                q_image.save(buffer, "JPEG", 50)  # 保存为 jpeg 格式的字节数据
-            path = Path(file_path)
-            for index in sel_idxes:
-                self.query.bindValue(':id', None)
-                self.query.bindValue(':mh_id', index.data())
-                self.query.bindValue(':name', path.name)
-                self.query.bindValue(':image', byte_array)
-                if not self.query.exec():
-                    self.db.con.rollback()
-                    QtWidgets.QMessageBox.critical(self, 'Error', self.query.lastError().text())
-                    return
-        self.db.con.commit()
-        QtWidgets.QMessageBox.information(self, 'Information', 'Successfully')
+    def on_btnAddImageRef_clicked(self):  # TODO
+        pass
 
     @pyqtSlot()
     def on_btnImageRef_clicked(self):  # TODO
