@@ -375,7 +375,7 @@ class ProcedureWin(QtWidgets.QWidget):
             file_paths.sort()
 
             sql = """INSERT INTO ProcRefImage
-                     VALUES (:id,:ref_id,,:ac_type,:name,:image,(
+                     VALUES (:id,:ref_id,:ac_type,:name,:image,(
                             SELECT IFNULL(MAX(sheet)+1,1) FROM ProcRefImage WHERE ref_id=:ref_id))"""
             self.db.con.transaction()  # 创建事务
             self.query.prepare(sql)
